@@ -82,6 +82,7 @@
             text-align: left;
             border-bottom: 1px solid #5e8c5e;
             font-size: 0.95rem;
+            vertical-align: middle;
         }
         th {
             background: #3e6b3e;
@@ -103,6 +104,13 @@
             transition: 0.2s;
         }
         button:hover { opacity: 0.9; }
+        .save-btn {
+            background: #4caf50;
+            color: white;
+            padding: 6px 12px;
+            font-size: 0.8rem;
+        }
+        .save-btn:hover { background: #66bb6a; }
         .flag { font-size: 1.3em; margin-right: 4px; }
         .message {
             background: #ffd966;
@@ -110,6 +118,14 @@
             padding: 12px;
             border-radius: 20px;
             margin: 15px 0;
+            font-weight: bold;
+        }
+        .success-message {
+            background: #4caf50;
+            color: white;
+            padding: 10px;
+            border-radius: 20px;
+            margin: 10px 0;
             font-weight: bold;
         }
         .error-message {
@@ -149,6 +165,12 @@
             margin: 15px 0;
             border-radius: 16px;
         }
+        .actions-col {
+            display: flex;
+            gap: 6px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
         @media (max-width: 700px) {
             .nav {
                 flex-direction: column;
@@ -181,6 +203,12 @@
             border-radius: 20px;
         }
         .login-form select, .login-form input { width: 100%; }
+        .saved-indicator {
+            display: inline-block;
+            color: #4caf50;
+            font-weight: bold;
+            margin-left: 6px;
+        }
     </style>
 </head>
 <body>
@@ -316,7 +344,6 @@
     function showLoading() { document.getElementById('loadingOverlay').style.display = 'flex'; }
     function hideLoading() { document.getElementById('loadingOverlay').style.display = 'none'; }
 
-    // Функция форматирования времени по Москве
     function formatTimeMoscow(isoString) {
         const date = new Date(isoString);
         return date.toLocaleString('ru-RU', { timeZone: 'Europe/Moscow', hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit', year: 'numeric' });
@@ -335,7 +362,6 @@
         renderLoginForm();
     }
 
-    // ==================== ИНИЦИАЛИЗАЦИЯ ПОЛЬЗОВАТЕЛЕЙ ====================
     async function initUsers() {
         const usersSnap = await db.ref('users').once('value');
         if (!usersSnap.exists()) {
@@ -350,7 +376,6 @@
         }
     }
 
-    // ==================== ЗАГРУЗКА СОСТОЯНИЯ МАТЧЕЙ ====================
     async function loadMatches() {
         const storedMatches = (await db.ref('matches').once('value')).val() || {};
         matchesState = matchesData.map(m => ({
@@ -359,7 +384,6 @@
         }));
     }
 
-    // ==================== ПОДСЧЁТ ОЧКОВ ====================
     function calcPoints(real, predicted) {
         if (!real || !predicted) return 0;
         const [r1, r2] = real.split(':').map(Number);
@@ -372,7 +396,6 @@
         return realWinner === predWinner ? 1 : 0;
     }
 
-    // ==================== СОХРАНЕНИЕ РЕАЛЬНОГО СЧЁТА (АДМИН) ====================
     async function saveRealScore(matchId, score) {
         if (!isAdmin) return false;
         await db.ref(`matches/${matchId}`).set({ real_score: score });
@@ -385,11 +408,9 @@
     async function recalcPointsForMatch(matchId) {
         const match = matchesState.find(m => m.id == matchId);
         if (!match || !match.real_score) return;
-
         const allPredictions = (await db.ref('predictions').once('value')).val() || {};
         const updates = {};
         const userPointDeltas = {};
-
         for (const [userId, preds] of Object.entries(allPredictions)) {
             const pred = preds[matchId];
             if (!pred) continue;
@@ -400,19 +421,13 @@
                 userPointDeltas[userId] = (userPointDeltas[userId] || 0) + (newPoints - oldPoints);
             }
         }
-
-        if (Object.keys(updates).length > 0) {
-            await db.ref().update(updates);
-        }
-
+        if (Object.keys(updates).length > 0) await db.ref().update(updates);
         for (const [userId, delta] of Object.entries(userPointDeltas)) {
-            if (delta !== 0) {
-                await db.ref(`users/${userId}/totalPoints`).transaction(current => (current || 0) + delta);
-            }
+            if (delta !== 0) await db.ref(`users/${userId}/totalPoints`).transaction(current => (current || 0) + delta);
         }
     }
 
-    // ==================== СОХРАНЕНИЕ ПРОГНОЗА ====================
+    // ==================== СОХРАНЕНИЕ ОДНОГО ПРОГНОЗА ====================
     async function savePrediction(matchId, score) {
         if (!currentUserKey) return;
         const match = matchesState.find(m => m.id == matchId);
@@ -422,7 +437,6 @@
         if (!/^\d+:\d+$/.test(score)) {
             throw new Error("Счёт должен быть в формате X:Y (только цифры)");
         }
-
         await db.ref(`predictions/${currentUserKey}/${matchId}`).set({
             score: score,
             updatedAt: firebase.database.ServerValue.TIMESTAMP
@@ -481,9 +495,7 @@
                         break;
                     }
                 }
-                if (!found) {
-                    throw new Error('Неверное имя или пароль');
-                }
+                if (!found) throw new Error('Неверное имя или пароль');
                 currentUser = { name: found.name };
                 currentUserKey = found.uid;
                 localStorage.setItem('currentUserUid', found.uid);
@@ -515,17 +527,18 @@
             await loadMatches();
             await loadMyPredictions();
             let tableHtml = `<div class="table-wrapper"><table>
-                <tr><th>Дата (МСК)</th><th>Матч</th><th>Ваш прогноз</th><th>Статус</th></tr>`;
+                <tr><th>Дата (МСК)</th><th>Матч</th><th>Прогноз</th><th>Статус</th><th></th></tr>`;
             for (const m of matchesState) {
                 const editable = new Date(m.start_time).getTime() > Date.now();
                 let [score1, score2] = ['', ''];
-                if (myPredictions[m.id]?.score) {
+                const hasPrediction = myPredictions[m.id] && myPredictions[m.id].score;
+                if (hasPrediction) {
                     const parts = myPredictions[m.id].score.split(':');
                     score1 = parts[0] || '';
                     score2 = parts[1] || '';
                 }
                 tableHtml += `
-                    <tr>
+                    <tr id="row_${m.id}">
                         <td>${formatTimeMoscow(m.start_time)}</td>
                         <td>${getFlag(m.team1)} ${m.team1} – ${getFlag(m.team2)} ${m.team2}</td>
                         <td>
@@ -533,19 +546,75 @@
                             <span class="score-separator">:</span>
                             <input type="text" id="pred2_${m.id}" class="score-input" value="${score2}" pattern="[0-9]*" inputmode="numeric" ${!editable ? 'disabled' : ''}>
                         </td>
-                        <td>${m.real_score ? `✅ ${m.real_score}` : '⏳'}</td>
+                        <td id="status_${m.id}">${m.real_score ? `✅ ${m.real_score}` : '⏳'}</td>
+                        <td>
+                            ${editable ? `<button class="save-btn" data-id="${m.id}">💾</button>` : ''}
+                            <span id="saved_${m.id}" class="saved-indicator" style="display:none;">✓</span>
+                        </td>
                     </tr>`;
             }
             tableHtml += `</table></div>
-                <button id="saveAllBtn">💾 Сохранить изменённые прогнозы</button>
+                <button id="saveAllBtn">💾 Сохранить все изменённые</button>
+                <div id="predMessage" class="success-message" style="display:none;"></div>
                 <div id="predError" class="error-message" style="display:none;"></div>`;
 
-            document.getElementById('content').innerHTML = `<h2>✍️ Прогнозы (${currentUser.name})</h2>${tableHtml}`;
+            document.getElementById('content').innerHTML = `<h2>✍️ Прогнозы (${currentUser.name})</h2>
+                <p style="margin:5px 0;color:#ffd966;">💡 Можно сохранять по одному матчу (кнопка 💾) или все изменённые разом</p>
+                ${tableHtml}`;
 
+            // Обработчики для кнопок "сохранить один матч"
+            document.querySelectorAll('.save-btn').forEach(btn => {
+                btn.onclick = async () => {
+                    const matchId = parseInt(btn.dataset.id);
+                    const inp1 = document.getElementById(`pred1_${matchId}`);
+                    const inp2 = document.getElementById(`pred2_${matchId}`);
+                    const val1 = inp1.value.trim();
+                    const val2 = inp2.value.trim();
+
+                    // Если оба поля пустые — не сохраняем
+                    if (val1 === '' && val2 === '') {
+                        alert('Введите счёт для сохранения');
+                        return;
+                    }
+                    // Если одно из полей заполнено, а второе нет — ошибка
+                    if ((val1 !== '' && val2 === '') || (val1 === '' && val2 !== '')) {
+                        alert('Заполните оба поля счёта');
+                        return;
+                    }
+                    if (!/^\d+$/.test(val1) || !/^\d+$/.test(val2)) {
+                        alert('Только цифры в полях счёта');
+                        return;
+                    }
+
+                    const score = `${val1}:${val2}`;
+                    const match = matchesState.find(m => m.id === matchId);
+                    showLoading();
+                    try {
+                        await savePrediction(matchId, score);
+                        // Показываем индикатор сохранения
+                        const savedIndicator = document.getElementById(`saved_${matchId}`);
+                        savedIndicator.style.display = 'inline-block';
+                        setTimeout(() => { savedIndicator.style.display = 'none'; }, 2000);
+                        // Обновляем статус если матч завершён
+                        if (match && match.real_score) {
+                            document.getElementById(`status_${matchId}`).textContent = `✅ ${match.real_score}`;
+                        }
+                    } catch (e) {
+                        alert(e.message);
+                    } finally {
+                        hideLoading();
+                    }
+                };
+            });
+
+            // Обработчик массового сохранения
             document.getElementById('saveAllBtn').onclick = async () => {
                 const errorDiv = document.getElementById('predError');
+                const msgDiv = document.getElementById('predMessage');
                 errorDiv.style.display = 'none';
+                msgDiv.style.display = 'none';
                 let changed = 0;
+                let skipped = 0;
                 showLoading();
                 try {
                     for (const m of matchesState) {
@@ -554,9 +623,22 @@
                         if (!inp1 || !inp2 || inp1.disabled || inp2.disabled) continue;
                         const val1 = inp1.value.trim();
                         const val2 = inp2.value.trim();
-                        if (!/^\d+$/.test(val1) || !/^\d+$/.test(val2)) {
-                            throw new Error(`Некорректный счёт в матче ${m.team1} – ${m.team2}`);
+
+                        // Пропускаем полностью пустые
+                        if (val1 === '' && val2 === '') {
+                            skipped++;
+                            continue;
                         }
+                        // Пропускаем неполные (не ругаемся, просто игнорируем)
+                        if (val1 === '' || val2 === '') {
+                            skipped++;
+                            continue;
+                        }
+                        if (!/^\d+$/.test(val1) || !/^\d+$/.test(val2)) {
+                            skipped++;
+                            continue;
+                        }
+
                         const newVal = `${val1}:${val2}`;
                         const oldVal = myPredictions[m.id]?.score || '';
                         if (newVal !== oldVal) {
@@ -565,10 +647,15 @@
                         }
                     }
                     if (changed > 0) {
-                        alert(`Сохранено прогнозов: ${changed}`);
+                        msgDiv.style.display = 'block';
+                        msgDiv.textContent = `✅ Сохранено: ${changed}. Пропущено: ${skipped}.`;
                         await renderPredictionsPage();
+                    } else if (skipped > 0) {
+                        msgDiv.style.display = 'block';
+                        msgDiv.textContent = `ℹ️ Нет новых прогнозов. Пропущено неполных: ${skipped}.`;
                     } else {
-                        alert('Нет изменений');
+                        msgDiv.style.display = 'block';
+                        msgDiv.textContent = 'ℹ️ Нет изменений для сохранения.';
                     }
                 } catch (e) {
                     errorDiv.style.display = 'block';
@@ -651,7 +738,6 @@
             }
             tableHtml += `</table></div>`;
             document.getElementById('content').innerHTML = `<h2>🔐 Админ: ввод счёта</h2>${tableHtml}`;
-
             document.querySelectorAll('.setScoreBtn').forEach(btn => {
                 btn.onclick = async () => {
                     const matchId = parseInt(btn.dataset.id);
@@ -682,7 +768,6 @@
         }
     }
 
-    // ==================== НАВИГАЦИЯ ====================
     function setupNavigation() {
         document.getElementById('btnPredictions').onclick = () => renderPredictionsPage();
         document.getElementById('btnTable').onclick = () => renderTablePage();
@@ -691,11 +776,9 @@
         document.getElementById('btnLogout').onclick = () => logout();
     }
 
-    // ==================== ИНИЦИАЛИЗАЦИЯ ====================
     async function init() {
         await initUsers();
         setupNavigation();
-
         const savedUid = localStorage.getItem('currentUserUid');
         if (savedUid) {
             showLoading();

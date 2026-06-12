@@ -3,48 +3,55 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ЧМ-2026: Турнир прогнозов</title>
-    <!-- Подключаем Firebase SDK -->
+    <title>ЧМ-2026 — Угадай счёт!</title>
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
     <style>
-        * { box-sizing: border-box; }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
         body {
             font-family: 'Segoe UI', Roboto, sans-serif;
             background: #1a3e1a;
-            margin: 0;
-            padding: 20px;
             color: #e0f2e0;
+            padding: 10px;
+            display: flex;
+            justify-content: center;
+            align-items: flex-start;
+            min-height: 100vh;
         }
         .container {
-            max-width: 1300px;
-            margin: auto;
+            width: 100%;
+            max-width: 1400px;
             background: #2c4e2c;
             border-radius: 24px;
             padding: 20px;
-            box-shadow: 0 8px 20px rgba(0,0,0,0.3);
+            box-shadow: 0 8px 20px rgba(0,0,0,0.4);
             border-left: 8px solid #ffd966;
         }
-        h1, h2, h3 { color: #ffd966; margin-top: 0; }
+        h1 { color: #ffd966; font-size: clamp(1.5rem, 5vw, 2.2rem); text-align: center; }
+        h2, h3 { color: #ffd966; }
         .nav {
             display: flex;
-            gap: 15px;
             flex-wrap: wrap;
-            margin-bottom: 20px;
+            gap: 8px;
+            margin: 15px 0;
             background: #1f3a1f;
             padding: 12px;
             border-radius: 40px;
+            justify-content: center;
         }
         .nav button {
             background: #3e6b3e;
             border: none;
-            padding: 8px 20px;
+            padding: 10px 18px;
             border-radius: 30px;
             color: white;
             cursor: pointer;
             font-weight: bold;
+            font-size: 0.9rem;
+            transition: 0.2s;
+            white-space: nowrap;
         }
-        .nav button.active {
+        .nav button.active, .nav button:hover {
             background: #ffd966;
             color: #1a3e1a;
         }
@@ -53,53 +60,123 @@
             border-collapse: collapse;
             background: #2a4a2a;
             border-radius: 16px;
-            overflow: auto;
+            overflow: hidden;
         }
         th, td {
-            padding: 10px;
+            padding: 12px 10px;
             text-align: left;
             border-bottom: 1px solid #5e8c5e;
+            font-size: 0.95rem;
         }
         th {
             background: #3e6b3e;
             color: #ffd966;
+            font-weight: bold;
         }
         input, select, button {
-            padding: 6px 12px;
+            padding: 8px 14px;
             border-radius: 20px;
             border: none;
             background: #e8f5e9;
             color: #1a3e1a;
             font-weight: bold;
+            font-size: 0.9rem;
         }
         button {
             background: #ffd966;
             cursor: pointer;
+            transition: 0.2s;
         }
-        .flag { font-size: 1.2em; margin-right: 5px; }
-        .message { background: #ffd966; color: #1a3e1a; padding: 10px; border-radius: 20px; margin: 10px 0; }
-        .admin-panel { background: #1f3a1f; padding: 15px; border-radius: 20px; margin-top: 20px; }
-        .toggle-admin { background: #cc7b00; color: white; }
-        .score-input { width: 80px; }
-        @media (max-width: 700px) { td, th { font-size: 12px; } }
+        button:hover { opacity: 0.9; }
+        .flag { font-size: 1.3em; margin-right: 4px; }
+        .message {
+            background: #ffd966;
+            color: #1a3e1a;
+            padding: 12px;
+            border-radius: 20px;
+            margin: 15px 0;
+            font-weight: bold;
+        }
+        .error-message {
+            background: #f88;
+            color: #1a3e1a;
+            padding: 10px;
+            border-radius: 20px;
+            margin: 10px 0;
+        }
+        .admin-panel {
+            background: #1f3a1f;
+            padding: 20px;
+            border-radius: 20px;
+            margin-top: 15px;
+        }
+        .toggle-admin { background: #cc7b00; }
+        .score-input { width: 85px; text-align: center; }
+        .loading-overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center;
+            z-index: 1000;
+        }
+        .spinner {
+            background: #2c4e2c; color: #ffd966; padding: 25px 40px; border-radius: 30px;
+            font-size: 1.4rem; font-weight: bold;
+        }
+        /* Адаптивная таблица */
+        .table-wrapper {
+            overflow-x: auto;
+            margin: 15px 0;
+            border-radius: 16px;
+        }
+        @media (max-width: 700px) {
+            .nav {
+                flex-direction: column;
+                align-items: stretch;
+                border-radius: 20px;
+            }
+            .nav button {
+                width: 100%;
+                padding: 12px;
+                font-size: 1rem;
+            }
+            th, td {
+                padding: 8px 6px;
+                font-size: 0.8rem;
+            }
+            .score-input { width: 70px; }
+            .container { padding: 10px; }
+        }
+        .login-form {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            max-width: 300px;
+            margin: 20px auto;
+            background: #1f3a1f;
+            padding: 20px;
+            border-radius: 20px;
+        }
+        .login-form select, .login-form input { width: 100%; }
     </style>
 </head>
 <body>
 <div class="container" id="app">
     <h1>⚽ ЧМ-2026 — Угадай счёт!</h1>
-    <div class="nav">
+    <!-- Навигация скрыта до входа -->
+    <div class="nav" id="navBar" style="display:none;">
         <button id="btnPredictions">📝 Мои прогнозы</button>
         <button id="btnTable">🏆 Таблица</button>
         <button id="btnMyHistory">📋 Мои результаты</button>
-        <button id="btnAdmin" class="toggle-admin">👑 Админ (ввод счёта)</button>
+        <button id="btnAdmin" class="toggle-admin">👑 Админ</button>
     </div>
     <div id="content">
-        <!-- Динамическое содержимое -->
+        <!-- Здесь будет форма логина или контент -->
     </div>
 </div>
+<!-- Индикатор загрузки (скрыт по умолчанию) -->
+<div id="loadingOverlay" class="loading-overlay" style="display:none;"><div class="spinner">Загрузка...</div></div>
 
 <script>
-    // ==================== ЗАМЕНИТЕ НА ВАШ КОНФИГ FIREBASE ====================
+    // ==================== КОНФИГ FIREBASE ====================
     const firebaseConfig = {
         apiKey: "AIzaSyAvIeiuvO6hoTRIf_zzgD-3uRNu4U9LM1Q",
         authDomain: "wc26-a3cff.firebaseapp.com",
@@ -109,79 +186,142 @@
         messagingSenderId: "786078940483",
         appId: "1:786078940483:web:f285b4bb673ddecd7e03f6"
     };
-    // ======================================================================
-
     firebase.initializeApp(firebaseConfig);
     const db = firebase.database();
 
-    // Текущий пользователь
+    // ==================== СПИСОК МАТЧЕЙ (72) ====================
+    const matchesData = [
+        {id:1,group:"A",round:1,team1:"Мексика",team2:"ЮАР",start_time:"2026-06-11T19:00:00Z",real_score:null},
+        {id:2,group:"A",round:1,team1:"Южная Корея",team2:"Чехия",start_time:"2026-06-12T02:00:00Z",real_score:null},
+        {id:3,group:"B",round:1,team1:"Канада",team2:"Босния и Герцеговина",start_time:"2026-06-12T19:00:00Z",real_score:null},
+        {id:4,group:"D",round:1,team1:"США",team2:"Парагвай",start_time:"2026-06-13T01:00:00Z",real_score:null},
+        {id:5,group:"B",round:1,team1:"Катар",team2:"Швейцария",start_time:"2026-06-13T19:00:00Z",real_score:null},
+        {id:6,group:"C",round:1,team1:"Бразилия",team2:"Марокко",start_time:"2026-06-13T22:00:00Z",real_score:null},
+        {id:7,group:"C",round:1,team1:"Гаити",team2:"Шотландия",start_time:"2026-06-14T01:00:00Z",real_score:null},
+        {id:8,group:"D",round:1,team1:"Австралия",team2:"Турция",start_time:"2026-06-14T04:00:00Z",real_score:null},
+        {id:9,group:"E",round:1,team1:"Германия",team2:"Кюрасао",start_time:"2026-06-14T17:00:00Z",real_score:null},
+        {id:10,group:"F",round:1,team1:"Нидерланды",team2:"Япония",start_time:"2026-06-14T20:00:00Z",real_score:null},
+        {id:11,group:"E",round:1,team1:"Кот-д'Ивуар",team2:"Эквадор",start_time:"2026-06-14T23:00:00Z",real_score:null},
+        {id:12,group:"F",round:1,team1:"Швеция",team2:"Тунис",start_time:"2026-06-15T02:00:00Z",real_score:null},
+        {id:13,group:"H",round:1,team1:"Испания",team2:"Кабо-Верде",start_time:"2026-06-15T16:00:00Z",real_score:null},
+        {id:14,group:"G",round:1,team1:"Бельгия",team2:"Египет",start_time:"2026-06-15T19:00:00Z",real_score:null},
+        {id:15,group:"H",round:1,team1:"Саудовская Аравия",team2:"Уругвай",start_time:"2026-06-15T22:00:00Z",real_score:null},
+        {id:16,group:"G",round:1,team1:"Иран",team2:"Новая Зеландия",start_time:"2026-06-16T01:00:00Z",real_score:null},
+        {id:17,group:"I",round:1,team1:"Франция",team2:"Сенегал",start_time:"2026-06-16T19:00:00Z",real_score:null},
+        {id:18,group:"I",round:1,team1:"Ирак",team2:"Норвегия",start_time:"2026-06-16T22:00:00Z",real_score:null},
+        {id:19,group:"J",round:1,team1:"Аргентина",team2:"Алжир",start_time:"2026-06-17T01:00:00Z",real_score:null},
+        {id:20,group:"J",round:1,team1:"Австрия",team2:"Иордания",start_time:"2026-06-17T04:00:00Z",real_score:null},
+        {id:21,group:"K",round:1,team1:"Португалия",team2:"ДР Конго",start_time:"2026-06-17T17:00:00Z",real_score:null},
+        {id:22,group:"L",round:1,team1:"Англия",team2:"Хорватия",start_time:"2026-06-17T20:00:00Z",real_score:null},
+        {id:23,group:"L",round:1,team1:"Гана",team2:"Панама",start_time:"2026-06-17T23:00:00Z",real_score:null},
+        {id:24,group:"K",round:1,team1:"Узбекистан",team2:"Колумбия",start_time:"2026-06-18T02:00:00Z",real_score:null},
+        {id:25,group:"A",round:2,team1:"Чехия",team2:"ЮАР",start_time:"2026-06-18T16:00:00Z",real_score:null},
+        {id:26,group:"B",round:2,team1:"Швейцария",team2:"Босния и Герцеговина",start_time:"2026-06-18T19:00:00Z",real_score:null},
+        {id:27,group:"B",round:2,team1:"Канада",team2:"Катар",start_time:"2026-06-18T22:00:00Z",real_score:null},
+        {id:28,group:"A",round:2,team1:"Мексика",team2:"Южная Корея",start_time:"2026-06-19T01:00:00Z",real_score:null},
+        {id:29,group:"D",round:2,team1:"США",team2:"Австралия",start_time:"2026-06-19T19:00:00Z",real_score:null},
+        {id:30,group:"C",round:2,team1:"Шотландия",team2:"Марокко",start_time:"2026-06-19T22:00:00Z",real_score:null},
+        {id:31,group:"C",round:2,team1:"Бразилия",team2:"Гаити",start_time:"2026-06-20T00:30:00Z",real_score:null},
+        {id:32,group:"D",round:2,team1:"Турция",team2:"Парагвай",start_time:"2026-06-20T03:00:00Z",real_score:null},
+        {id:33,group:"F",round:2,team1:"Нидерланды",team2:"Швеция",start_time:"2026-06-20T17:00:00Z",real_score:null},
+        {id:34,group:"E",round:2,team1:"Германия",team2:"Кот-д'Ивуар",start_time:"2026-06-20T20:00:00Z",real_score:null},
+        {id:35,group:"E",round:2,team1:"Эквадор",team2:"Кюрасао",start_time:"2026-06-21T00:00:00Z",real_score:null},
+        {id:36,group:"F",round:2,team1:"Тунис",team2:"Япония",start_time:"2026-06-21T04:00:00Z",real_score:null},
+        {id:37,group:"H",round:2,team1:"Испания",team2:"Саудовская Аравия",start_time:"2026-06-21T16:00:00Z",real_score:null},
+        {id:38,group:"G",round:2,team1:"Бельгия",team2:"Иран",start_time:"2026-06-21T19:00:00Z",real_score:null},
+        {id:39,group:"H",round:2,team1:"Уругвай",team2:"Кабо-Верде",start_time:"2026-06-21T22:00:00Z",real_score:null},
+        {id:40,group:"G",round:2,team1:"Новая Зеландия",team2:"Египет",start_time:"2026-06-22T01:00:00Z",real_score:null},
+        {id:41,group:"J",round:2,team1:"Аргентина",team2:"Австрия",start_time:"2026-06-22T17:00:00Z",real_score:null},
+        {id:42,group:"I",round:2,team1:"Франция",team2:"Ирак",start_time:"2026-06-22T21:00:00Z",real_score:null},
+        {id:43,group:"I",round:2,team1:"Норвегия",team2:"Сенегал",start_time:"2026-06-23T00:00:00Z",real_score:null},
+        {id:44,group:"J",round:2,team1:"Иордания",team2:"Алжир",start_time:"2026-06-23T03:00:00Z",real_score:null},
+        {id:45,group:"K",round:2,team1:"Португалия",team2:"Узбекистан",start_time:"2026-06-23T17:00:00Z",real_score:null},
+        {id:46,group:"L",round:2,team1:"Англия",team2:"Гана",start_time:"2026-06-23T20:00:00Z",real_score:null},
+        {id:47,group:"L",round:2,team1:"Панама",team2:"Хорватия",start_time:"2026-06-23T23:00:00Z",real_score:null},
+        {id:48,group:"K",round:2,team1:"Колумбия",team2:"ДР Конго",start_time:"2026-06-24T02:00:00Z",real_score:null},
+        {id:49,group:"B",round:3,team1:"Швейцария",team2:"Канада",start_time:"2026-06-24T19:00:00Z",real_score:null},
+        {id:50,group:"B",round:3,team1:"Босния и Герцеговина",team2:"Катар",start_time:"2026-06-24T19:00:00Z",real_score:null},
+        {id:51,group:"C",round:3,team1:"Марокко",team2:"Гаити",start_time:"2026-06-24T22:00:00Z",real_score:null},
+        {id:52,group:"C",round:3,team1:"Шотландия",team2:"Бразилия",start_time:"2026-06-24T22:00:00Z",real_score:null},
+        {id:53,group:"A",round:3,team1:"Чехия",team2:"Мексика",start_time:"2026-06-25T01:00:00Z",real_score:null},
+        {id:54,group:"A",round:3,team1:"ЮАР",team2:"Южная Корея",start_time:"2026-06-25T01:00:00Z",real_score:null},
+        {id:55,group:"E",round:3,team1:"Кюрасао",team2:"Кот-д'Ивуар",start_time:"2026-06-25T20:00:00Z",real_score:null},
+        {id:56,group:"E",round:3,team1:"Эквадор",team2:"Германия",start_time:"2026-06-25T20:00:00Z",real_score:null},
+        {id:57,group:"F",round:3,team1:"Япония",team2:"Швеция",start_time:"2026-06-25T23:00:00Z",real_score:null},
+        {id:58,group:"F",round:3,team1:"Тунис",team2:"Нидерланды",start_time:"2026-06-25T23:00:00Z",real_score:null},
+        {id:59,group:"D",round:3,team1:"Турция",team2:"США",start_time:"2026-06-26T02:00:00Z",real_score:null},
+        {id:60,group:"D",round:3,team1:"Парагвай",team2:"Австралия",start_time:"2026-06-26T02:00:00Z",real_score:null},
+        {id:61,group:"I",round:3,team1:"Норвегия",team2:"Франция",start_time:"2026-06-26T19:00:00Z",real_score:null},
+        {id:62,group:"I",round:3,team1:"Сенегал",team2:"Ирак",start_time:"2026-06-26T19:00:00Z",real_score:null},
+        {id:63,group:"H",round:3,team1:"Кабо-Верде",team2:"Саудовская Аравия",start_time:"2026-06-27T00:00:00Z",real_score:null},
+        {id:64,group:"H",round:3,team1:"Уругвай",team2:"Испания",start_time:"2026-06-27T00:00:00Z",real_score:null},
+        {id:65,group:"G",round:3,team1:"Новая Зеландия",team2:"Бельгия",start_time:"2026-06-27T03:00:00Z",real_score:null},
+        {id:66,group:"G",round:3,team1:"Египет",team2:"Иран",start_time:"2026-06-27T03:00:00Z",real_score:null},
+        {id:67,group:"L",round:3,team1:"Панама",team2:"Англия",start_time:"2026-06-27T21:00:00Z",real_score:null},
+        {id:68,group:"L",round:3,team1:"Хорватия",team2:"Гана",start_time:"2026-06-27T21:00:00Z",real_score:null},
+        {id:69,group:"K",round:3,team1:"ДР Конго",team2:"Узбекистан",start_time:"2026-06-27T23:30:00Z",real_score:null},
+        {id:70,group:"K",round:3,team1:"Колумбия",team2:"Португалия",start_time:"2026-06-27T23:30:00Z",real_score:null},
+        {id:71,group:"J",round:3,team1:"Иордания",team2:"Аргентина",start_time:"2026-06-28T02:00:00Z",real_score:null},
+        {id:72,group:"J",round:3,team1:"Алжир",team2:"Австрия",start_time:"2026-06-28T02:00:00Z",real_score:null}
+    ];
+
+    // ==================== ФЛАГИ ДЛЯ ВСЕХ СТРАН ====================
+    const flags = {
+        "Мексика":"🇲🇽","ЮАР":"🇿🇦","Южная Корея":"🇰🇷","Чехия":"🇨🇿","Канада":"🇨🇦",
+        "Босния и Герцеговина":"🇧🇦","Катар":"🇶🇦","Швейцария":"🇨🇭","Бразилия":"🇧🇷",
+        "Марокко":"🇲🇦","Гаити":"🇭🇹","Шотландия":"🏴","США":"🇺🇸","Парагвай":"🇵🇾",
+        "Австралия":"🇦🇺","Турция":"🇹🇷","Германия":"🇩🇪","Кюрасао":"🇨🇼",
+        "Кот-д'Ивуар":"🇨🇮","Эквадор":"🇪🇨","Нидерланды":"🇳🇱","Япония":"🇯🇵",
+        "Швеция":"🇸🇪","Тунис":"🇹🇳","Испания":"🇪🇸","Кабо-Верде":"🇨🇻",
+        "Бельгия":"🇧🇪","Египет":"🇪🇬","Саудовская Аравия":"🇸🇦","Уругвай":"🇺🇾",
+        "Иран":"🇮🇷","Новая Зеландия":"🇳🇿","Франция":"🇫🇷","Сенегал":"🇸🇳",
+        "Ирак":"🇮🇶","Норвегия":"🇳🇴","Аргентина":"🇦🇷","Алжир":"🇩🇿",
+        "Австрия":"🇦🇹","Иордания":"🇯🇴","Португалия":"🇵🇹","ДР Конго":"🇨🇩",
+        "Англия":"🏴","Хорватия":"🇭🇷","Гана":"🇬🇭","Панама":"🇵🇦",
+        "Узбекистан":"🇺🇿","Колумбия":"🇨🇴","Шотландия":"🏴"
+    };
+    function getFlag(country) { return flags[country] || "🏁"; }
+
+    // ==================== ГЛОБАЛЬНЫЕ ПЕРЕМЕННЫЕ ====================
     let currentUser = null;
     let currentUserKey = null;
     let isAdmin = false;
+    let matchesState = [];   // обогащённый список матчей
+    let myPredictions = {};  // прогнозы текущего пользователя
 
-    // Список матчей (захардкодим на основе предыдущих данных)
-    const matches = [
-        { id: 1, team1: "Мексика", team2: "ЮАР", start_time: "2026-06-11 17:00:00", status: "upcoming", real_score: null },
-        { id: 2, team1: "Южная Корея", team2: "Чехия", start_time: "2026-06-12 14:00:00", status: "upcoming", real_score: null },
-        { id: 3, team1: "Мексика", team2: "Южная Корея", start_time: "2026-06-16 20:00:00", status: "upcoming", real_score: null },
-        // ... добавьте остальные матчи из предыдущего списка (я сократил для примера, но вы можете вставить полные 72 матча)
-        // Для полноты можно скопировать матчи из matches.json, но вручную. Я добавлю несколько для демо.
-    ];
+    // ==================== ПОКАЗ / СКРЫТИЕ ЗАГРУЗКИ ====================
+    function showLoading() { document.getElementById('loadingOverlay').style.display = 'flex'; }
+    function hideLoading() { document.getElementById('loadingOverlay').style.display = 'none'; }
 
-    // Для демонстрации добавим хотя бы 10 матчей (вы потом дополните до всех)
-    const fullMatchesList = [
-        {id:1,team1:"Мексика",team2:"ЮАР",start_time:"2026-06-11 17:00:00"},
-        {id:2,team1:"Южная Корея",team2:"Чехия",start_time:"2026-06-12 14:00:00"},
-        {id:3,team1:"Мексика",team2:"Южная Корея",start_time:"2026-06-16 20:00:00"},
-        {id:4,team1:"ЮАР",team2:"Чехия",start_time:"2026-06-17 17:00:00"},
-        {id:5,team1:"Канада",team2:"Босния и Герцеговина",start_time:"2026-06-11 20:00:00"},
-        {id:6,team1:"Катар",team2:"Швейцария",start_time:"2026-06-12 17:00:00"},
-        {id:7,team1:"Бразилия",team2:"Марокко",start_time:"2026-06-12 20:00:00"},
-        {id:8,team1:"США",team2:"Парагвай",start_time:"2026-06-13 17:00:00"},
-        {id:9,team1:"Германия",team2:"Кот-д'Ивуар",start_time:"2026-06-13 20:00:00"},
-        {id:10,team1:"Нидерланды",team2:"Япония",start_time:"2026-06-14 20:00:00"}
-    ];
-
-    // Флаги (упрощённо)
-    function getFlag(country) {
-        const flags = { "Мексика":"🇲🇽","ЮАР":"🇿🇦","Южная Корея":"🇰🇷","Чехия":"🇨🇿","Канада":"🇨🇦","Босния и Герцеговина":"🇧🇦","Катар":"🇶🇦","Швейцария":"🇨🇭","Бразилия":"🇧🇷","Марокко":"🇲🇦","США":"🇺🇸","Парагвай":"🇵🇾","Германия":"🇩🇪","Кот-д'Ивуар":"🇨🇮","Нидерланды":"🇳🇱","Япония":"🇯🇵"};
-        return flags[country] || "🏁";
+    // ==================== ИНИЦИАЛИЗАЦИЯ ПОЛЬЗОВАТЕЛЕЙ (ЕСЛИ НЕТ) ====================
+    async function initUsers() {
+        const usersSnap = await db.ref('users').once('value');
+        if (!usersSnap.exists()) {
+            const defaultUsers = {
+                "user1": { name: "Lieutenant Columbo", password: "wc2026", totalPoints: 0 },
+                "user2": { name: "deus `<))><< SHPROTSKIY", password: "wc2026", totalPoints: 0 },
+                "user3": { name: "kzp", password: "wc2026", totalPoints: 0 },
+                "user4": { name: "toaster", password: "wc2026", totalPoints: 0 },
+                "user5": { name: "OrDynary", password: "wc2026", totalPoints: 0 }
+            };
+            await db.ref('users').set(defaultUsers);
+        }
     }
 
-    // Состояние матчей из Firebase (будем подгружать real_score)
-    let matchesState = [];
-
-    // Загрузка реальных счётов из Firebase и объединение
-    function loadMatches() {
-        return new Promise((resolve) => {
-            firebase.database().ref('matches').once('value', (snapshot) => {
-                const stored = snapshot.val() || {};
-                const enriched = fullMatchesList.map(m => ({
-                    ...m,
-                    real_score: stored[m.id] ? stored[m.id].real_score : null,
-                    status: stored[m.id] && stored[m.id].real_score ? "completed" : "upcoming"
-                }));
-                matchesState = enriched;
-                resolve(enriched);
-            });
-        });
+    // ==================== ЗАГРУЗКА СОСТОЯНИЯ МАТЧЕЙ ====================
+    async function loadMatches() {
+        const storedMatches = (await db.ref('matches').once('value')).val() || {};
+        matchesState = matchesData.map(m => ({
+            ...m,
+            real_score: storedMatches[m.id] ? storedMatches[m.id].real_score : null
+        }));
     }
 
-    // Сохранение реального счёта (только админ)
-    async function saveRealScore(matchId, score) {
-        if (!isAdmin) return false;
-        await firebase.database().ref('matches/' + matchId).set({ real_score: score });
-        await loadMatches();
-        // Пересчёт очков для всех пользователей
-        await recalcAllPoints();
-        return true;
-    }
-
-    // Функция подсчёта очков для одного прогноза
+    // ==================== ПОДСЧЁТ ОЧКОВ ====================
     function calcPoints(real, predicted) {
         if (!real || !predicted) return 0;
-        let [r1, r2] = real.split(':').map(Number);
-        let [p1, p2] = predicted.split(':').map(Number);
+        const [r1, r2] = real.split(':').map(Number);
+        const [p1, p2] = predicted.split(':').map(Number);
         if (isNaN(r1) || isNaN(r2) || isNaN(p1) || isNaN(p2)) return 0;
         if (r1 === p1 && r2 === p2) return 3;
         if ((r1 - r2) === (p1 - p2)) return 2;
@@ -190,238 +330,344 @@
         return realWinner === predWinner ? 1 : 0;
     }
 
-    // Пересчёт очков для всех пользователей по всем завершённым матчам
-    async function recalcAllPoints() {
-        const predictionsSnapshot = await firebase.database().ref('predictions').once('value');
-        const predictions = predictionsSnapshot.val() || {};
-        const usersSnapshot = await firebase.database().ref('users').once('value');
-        const users = usersSnapshot.val() || {};
-
-        for (let userId in users) {
-            let total = 0;
-            const userPreds = predictions[userId] || {};
-            for (let matchId in userPreds) {
-                const match = matchesState.find(m => m.id == matchId);
-                if (match && match.real_score) {
-                    // Берём последний прогноз (по времени)
-                    let predObj = userPreds[matchId];
-                    let predictedScore = predObj.score;
-                    if (predObj.updatedAt) {
-                        // В реальности храним последний, у нас будет одно значение
-                    }
-                    const pts = calcPoints(match.real_score, predictedScore);
-                    total += pts;
-                    // Сохраняем очки за конкретный прогноз (опционально)
-                    await firebase.database().ref(`predictions/${userId}/${matchId}/points`).set(pts);
-                }
-            }
-            await firebase.database().ref(`users/${userId}/totalPoints`).set(total);
-        }
-    }
-
-    // Сохранение прогноза пользователя
-    async function savePrediction(matchId, score) {
-        if (!currentUserKey) return;
+    // ==================== СОХРАНЕНИЕ РЕАЛЬНОГО СЧЁТА (АДМИН) ====================
+    async function saveRealScore(matchId, score) {
+        if (!isAdmin) return false;
+        // Обновляем счёт в базе
+        await db.ref(`matches/${matchId}`).set({ real_score: score });
+        // Обновляем локальное состояние
         const match = matchesState.find(m => m.id == matchId);
-        const now = new Date().toISOString();
-        if (match && new Date(match.start_time) <= new Date()) {
-            alert("Матч уже начался, прогноз нельзя изменить!");
-            return false;
-        }
-        await firebase.database().ref(`predictions/${currentUserKey}/${matchId}`).set({
-            score: score,
-            updatedAt: now
-        });
-        // Пересчитать очки для этого пользователя за все матчи
-        await recalcAllPoints();
+        if (match) match.real_score = score;
+        // Пересчитываем очки только для этого матча
+        await recalcPointsForMatch(matchId);
         return true;
     }
 
-    // Получение всех пользователей с очками
-    async function getLeaderboard() {
-        const usersSnap = await firebase.database().ref('users').once('value');
-        const users = usersSnap.val() || {};
-        const leaderboard = [];
-        for (let uid in users) {
-            leaderboard.push({
-                name: users[uid].name,
-                points: users[uid].totalPoints || 0,
-                uid
-            });
-        }
-        leaderboard.sort((a,b) => b.points - a.points);
-        return leaderboard;
-    }
+    // Инкрементальный пересчёт очков за один матч
+    async function recalcPointsForMatch(matchId) {
+        const match = matchesState.find(m => m.id == matchId);
+        if (!match || !match.real_score) return;
 
-    // Получение прогнозов текущего пользователя
-    async function getMyPredictions() {
-        if (!currentUserKey) return {};
-        const snap = await firebase.database().ref(`predictions/${currentUserKey}`).once('value');
-        return snap.val() || {};
-    }
+        const allPredictions = (await db.ref('predictions').once('value')).val() || {};
+        const updates = {};
+        const userPointDeltas = {}; // userId -> разница очков
 
-    // --- UI: Рендер разных страниц ---
-
-    function renderPredictionsPage() {
-        const html = `
-            <h2>✍️ Ваши прогнозы, ${currentUser?.name || ''}</h2>
-            <div id="predictionsContainer"></div>
-            <button id="saveAllPredictionsBtn" style="margin-top:15px">💾 Сохранить все прогнозы</button>
-        `;
-        document.getElementById('content').innerHTML = html;
-        loadMatches().then(() => {
-            getMyPredictions().then(myPreds => {
-                let tableHtml = `<table><tr><th>Дата</th><th>Матч</th><th>Ваш прогноз (Х:Y)</th><th>Статус</th></tr>`;
-                for (let m of matchesState) {
-                    const editable = new Date(m.start_time) > new Date();
-                    const current = myPreds[m.id]?.score || '';
-                    tableHtml += `
-                        <tr>
-                            <td>${m.start_time}</td>
-                            <td>${getFlag(m.team1)} ${m.team1} – ${getFlag(m.team2)} ${m.team2}</td>
-                            <td><input type="text" id="pred_${m.id}" value="${current}" placeholder="2:1" ${!editable ? 'disabled' : ''}></td>
-                            <td>${m.real_score ? `✅ Завершён (${m.real_score})` : '⏳ Предстоящий'}</td>
-                        </tr>
-                    `;
-                }
-                tableHtml += `</table>`;
-                document.getElementById('predictionsContainer').innerHTML = tableHtml;
-                document.getElementById('saveAllPredictionsBtn').onclick = async () => {
-                    for (let m of matchesState) {
-                        const input = document.getElementById(`pred_${m.id}`);
-                        if (input && !input.disabled) {
-                            await savePrediction(m.id, input.value);
-                        }
-                    }
-                    alert("Прогнозы сохранены!");
-                    renderPredictionsPage(); // обновить
-                };
-            });
-        });
-    }
-
-    async function renderTablePage() {
-        const leaderboard = await getLeaderboard();
-        let rows = '';
-        leaderboard.forEach((u, idx) => {
-            rows += `<tr><td>${idx+1}</td><td>${u.name}</td><td><b>${u.points}</b></td></tr>`;
-        });
-        document.getElementById('content').innerHTML = `
-            <h2>🏆 Турнирная таблица</h2>
-            <table><tr><th>Место</th><th>Игрок</th><th>Очки</th></tr>${rows}</table>
-        `;
-    }
-
-    async function renderMyHistoryPage() {
-        const myPreds = await getMyPredictions();
-        await loadMatches();
-        let historyHtml = `<table><tr><th>Матч</th><th>Ваш прогноз</th><th>Реальный счёт</th><th>Очки</th></tr>`;
-        for (let m of matchesState) {
-            const pred = myPreds[m.id];
-            if (pred && m.real_score) {
-                const pts = calcPoints(m.real_score, pred.score);
-                historyHtml += `<tr>
-                    <td>${getFlag(m.team1)} ${m.team1} – ${getFlag(m.team2)} ${m.team2}</td>
-                    <td>${pred.score}</td>
-                    <td>${m.real_score}</td>
-                    <td>${pts}</td>
-                </tr>`;
-            } else if (pred && !m.real_score) {
-                historyHtml += `<tr>
-                    <td>${getFlag(m.team1)} ${m.team1} – ${getFlag(m.team2)} ${m.team2}</td>
-                    <td>${pred.score}</td>
-                    <td>—</td>
-                    <td>—</td>
-                </tr>`;
+        for (const [userId, preds] of Object.entries(allPredictions)) {
+            const pred = preds[matchId];
+            if (!pred) continue;
+            const oldPoints = pred.points || 0;
+            const newPoints = calcPoints(match.real_score, pred.score);
+            if (oldPoints !== newPoints) {
+                updates[`predictions/${userId}/${matchId}/points`] = newPoints;
+                userPointDeltas[userId] = (userPointDeltas[userId] || 0) + (newPoints - oldPoints);
             }
         }
-        historyHtml += `</table>`;
-        document.getElementById('content').innerHTML = `<h2>📋 История прогнозов</h2>${historyHtml}`;
+
+        // Применяем обновления прогнозов пакетно
+        if (Object.keys(updates).length > 0) {
+            await db.ref().update(updates);
+        }
+
+        // Обновляем totalPoints атомарно через транзакции
+        for (const [userId, delta] of Object.entries(userPointDeltas)) {
+            if (delta !== 0) {
+                await db.ref(`users/${userId}/totalPoints`).transaction(current => {
+                    return (current || 0) + delta;
+                });
+            }
+        }
     }
 
-    async function renderAdminPage() {
-        if (!isAdmin) {
-            const pw = prompt("Введите пароль администратора:");
-            if (pw === "admin2026") { // задайте свой пароль
-                isAdmin = true;
-                renderAdminPage();
-            } else {
-                alert("Неверный пароль");
+    // ==================== СОХРАНЕНИЕ ПРОГНОЗА ====================
+    async function savePrediction(matchId, score) {
+        if (!currentUserKey) return;
+        const match = matchesState.find(m => m.id == matchId);
+        // Проверка времени: матч уже начался?
+        if (match && new Date(match.start_time).getTime() <= Date.now()) {
+            throw new Error("Матч уже начался, прогноз нельзя изменить!");
+        }
+        // Валидация формата
+        if (!/^\d+:\d+$/.test(score)) {
+            throw new Error("Счёт должен быть в формате X:Y (только цифры)");
+        }
+
+        // Сохраняем прогноз
+        await db.ref(`predictions/${currentUserKey}/${matchId}`).set({
+            score: score,
+            updatedAt: firebase.database.ServerValue.TIMESTAMP
+        });
+        // Обновляем локальные данные
+        myPredictions[matchId] = { score, points: match.real_score ? calcPoints(match.real_score, score) : 0 };
+        // Если матч уже завершён, пересчитываем очки за этот матч
+        if (match && match.real_score) {
+            await recalcPointsForMatch(matchId);
+        }
+    }
+
+    // ==================== ПОЛУЧЕНИЕ ТАБЛИЦЫ ЛИДЕРОВ ====================
+    async function getLeaderboard() {
+        const usersSnap = await db.ref('users').once('value');
+        const users = usersSnap.val() || {};
+        return Object.entries(users)
+            .map(([uid, data]) => ({ name: data.name, points: data.totalPoints || 0, uid }))
+            .sort((a, b) => b.points - a.points);
+    }
+
+    // ==================== UI: ФОРМА ЛОГИНА ====================
+    function renderLoginForm() {
+        document.getElementById('navBar').style.display = 'none';
+        document.getElementById('content').innerHTML = `
+            <div class="login-form">
+                <h2>Вход</h2>
+                <select id="loginName">
+                    <option value="">Выберите имя</option>
+                    <option>Lieutenant Columbo</option>
+                    <option>deus \`<))><< SHPROTSKIY</option>
+                    <option>kzp</option>
+                    <option>toaster</option>
+                    <option>OrDynary</option>
+                </select>
+                <input type="password" id="loginPassword" placeholder="Пароль">
+                <button id="loginBtn">Войти</button>
+                <div id="loginError" class="error-message" style="display:none;"></div>
+            </div>
+        `;
+        document.getElementById('loginBtn').onclick = async () => {
+            const name = document.getElementById('loginName').value.trim();
+            const password = document.getElementById('loginPassword').value;
+            if (!name || !password) {
+                document.getElementById('loginError').style.display = 'block';
+                document.getElementById('loginError').textContent = 'Введите имя и пароль';
                 return;
             }
-        }
-        await loadMatches();
-        let adminHtml = `<h2>🔐 Админ: ввод реальных счетов</h2>
-        <table><tr><th>Матч</th><th>Дата</th><th>Текущий счёт</th><th>Ввести счёт (Х:Y)</th></tr>`;
-        for (let m of matchesState) {
-            adminHtml += `<tr>
-                <td>${getFlag(m.team1)} ${m.team1} – ${getFlag(m.team2)} ${m.team2}</td>
-                <td>${m.start_time}</td>
-                <td>${m.real_score || '—'}</td>
-                <td><input type="text" id="admin_score_${m.id}" placeholder="3:1"><button onclick="window.setScore(${m.id})">✅</button></td>
-            </tr>`;
-        }
-        adminHtml += `</table>`;
-        document.getElementById('content').innerHTML = adminHtml;
-        window.setScore = async (matchId) => {
-            const input = document.getElementById(`admin_score_${matchId}`);
-            const score = input.value;
-            if (score && /^\d+:\d+$/.test(score)) {
-                await saveRealScore(matchId, score);
-                renderAdminPage();
-            } else {
-                alert("Введите счёт в формате Х:Y");
+            showLoading();
+            try {
+                const usersSnap = await db.ref('users').once('value');
+                const users = usersSnap.val() || {};
+                let found = null;
+                for (const [uid, data] of Object.entries(users)) {
+                    if (data.name === name && data.password === password) {
+                        found = { uid, name: data.name };
+                        break;
+                    }
+                }
+                if (!found) {
+                    throw new Error('Неверное имя или пароль');
+                }
+                currentUser = { name: found.name };
+                currentUserKey = found.uid;
+                localStorage.setItem('currentUserUid', found.uid);
+                document.getElementById('navBar').style.display = 'flex';
+                await loadMatches();
+                await loadMyPredictions();
+                renderPredictionsPage();
+            } catch (e) {
+                document.getElementById('loginError').style.display = 'block';
+                document.getElementById('loginError').textContent = e.message;
+            } finally {
+                hideLoading();
             }
         };
     }
 
-    // Авторизация (выбор имени и пароля)
-    async function login() {
-        const name = prompt("Введите ваше имя (как в списке)");
-        const password = prompt("Пароль");
-        if (!name || !password) return;
-        const usersSnap = await firebase.database().ref('users').once('value');
-        const users = usersSnap.val() || {};
-        let found = null;
-        for (let uid in users) {
-            if (users[uid].name === name && users[uid].password === password) {
-                found = { uid, name };
-                break;
-            }
-        }
-        if (!found) {
-            alert("Неверное имя или пароль. Обратитесь к администратору.");
-            return;
-        }
-        currentUser = { name: found.name };
-        currentUserKey = found.uid;
-        localStorage.setItem('currentUserUid', found.uid);
-        localStorage.setItem('currentUserName', found.name);
-        renderPredictionsPage();
-        document.querySelectorAll('.nav button').forEach(btn => btn.disabled = false);
+    // Загрузка прогнозов текущего пользователя
+    async function loadMyPredictions() {
+        if (!currentUserKey) return;
+        const snap = await db.ref(`predictions/${currentUserKey}`).once('value');
+        myPredictions = snap.val() || {};
     }
 
-    // Первоначальная загрузка: проверка авторизации
-    async function init() {
-        const savedUid = localStorage.getItem('currentUserUid');
-        if (savedUid) {
-            const userSnap = await firebase.database().ref(`users/${savedUid}`).once('value');
-            const user = userSnap.val();
-            if (user) {
-                currentUser = { name: user.name };
-                currentUserKey = savedUid;
-                renderPredictionsPage();
-            } else {
-                login();
+    // ==================== UI: СТРАНИЦА ПРОГНОЗОВ ====================
+    async function renderPredictionsPage() {
+        showLoading();
+        try {
+            await loadMatches();
+            await loadMyPredictions();
+            let tableHtml = `<div class="table-wrapper"><table>
+                <tr><th>Дата (UTC)</th><th>Матч</th><th>Ваш прогноз</th><th>Статус</th></tr>`;
+            for (const m of matchesState) {
+                const editable = new Date(m.start_time).getTime() > Date.now();
+                const currentScore = myPredictions[m.id]?.score || '';
+                tableHtml += `
+                    <tr>
+                        <td>${new Date(m.start_time).toLocaleString('ru-RU', {timeZone:'UTC'})}</td>
+                        <td>${getFlag(m.team1)} ${m.team1} – ${getFlag(m.team2)} ${m.team2}</td>
+                        <td><input type="text" id="pred_${m.id}" value="${currentScore}" class="score-input" ${!editable ? 'disabled' : ''}></td>
+                        <td>${m.real_score ? `✅ ${m.real_score}` : '⏳'}</td>
+                    </tr>`;
             }
-        } else {
-            login();
+            tableHtml += `</table></div>
+                <button id="saveAllBtn">💾 Сохранить изменённые прогнозы</button>
+                <div id="predError" class="error-message" style="display:none;"></div>`;
+
+            document.getElementById('content').innerHTML = `<h2>✍️ Прогнозы (${currentUser.name})</h2>${tableHtml}`;
+
+            document.getElementById('saveAllBtn').onclick = async () => {
+                const errorDiv = document.getElementById('predError');
+                errorDiv.style.display = 'none';
+                let changed = 0;
+                showLoading();
+                try {
+                    for (const m of matchesState) {
+                        const input = document.getElementById(`pred_${m.id}`);
+                        if (!input || input.disabled) continue;
+                        const newVal = input.value.trim();
+                        const oldVal = myPredictions[m.id]?.score || '';
+                        if (newVal !== oldVal) {
+                            await savePrediction(m.id, newVal);
+                            changed++;
+                        }
+                    }
+                    if (changed > 0) {
+                        alert(`Сохранено прогнозов: ${changed}`);
+                        await renderPredictionsPage(); // обновить для актуальных данных
+                    } else {
+                        alert('Нет изменений');
+                    }
+                } catch (e) {
+                    errorDiv.style.display = 'block';
+                    errorDiv.textContent = e.message;
+                } finally {
+                    hideLoading();
+                }
+            };
+        } finally {
+            hideLoading();
         }
-        // Навигация
+    }
+
+    // ==================== UI: ТАБЛИЦА ЛИДЕРОВ ====================
+    async function renderTablePage() {
+        showLoading();
+        try {
+            const leaderboard = await getLeaderboard();
+            let rows = leaderboard.map((u, i) => `<tr><td>${i+1}</td><td>${u.name}</td><td><b>${u.points}</b></td></tr>`).join('');
+            document.getElementById('content').innerHTML = `
+                <h2>🏆 Турнирная таблица</h2>
+                <div class="table-wrapper"><table><tr><th>Место</th><th>Игрок</th><th>Очки</th></tr>${rows}</table></div>`;
+        } finally {
+            hideLoading();
+        }
+    }
+
+    // ==================== UI: МОЯ ИСТОРИЯ ====================
+    async function renderMyHistoryPage() {
+        showLoading();
+        try {
+            await loadMatches();
+            await loadMyPredictions();
+            let historyHtml = `<div class="table-wrapper"><table>
+                <tr><th>Матч</th><th>Прогноз</th><th>Реальность</th><th>Очки</th></tr>`;
+            for (const m of matchesState) {
+                const pred = myPredictions[m.id];
+                if (pred && m.real_score) {
+                    const pts = calcPoints(m.real_score, pred.score);
+                    historyHtml += `<tr>
+                        <td>${getFlag(m.team1)} ${m.team1} – ${getFlag(m.team2)} ${m.team2}</td>
+                        <td>${pred.score}</td><td>${m.real_score}</td><td>${pts}</td></tr>`;
+                } else if (pred && !m.real_score) {
+                    historyHtml += `<tr>
+                        <td>${getFlag(m.team1)} ${m.team1} – ${getFlag(m.team2)} ${m.team2}</td>
+                        <td>${pred.score}</td><td>—</td><td>—</td></tr>`;
+                }
+            }
+            historyHtml += `</table></div>`;
+            document.getElementById('content').innerHTML = `<h2>📋 История прогнозов</h2>${historyHtml}`;
+        } finally {
+            hideLoading();
+        }
+    }
+
+    // ==================== UI: АДМИН-ПАНЕЛЬ ====================
+    async function renderAdminPage() {
+        if (!isAdmin) {
+            const pw = prompt("Пароль администратора:");
+            if (pw !== "admin2026") { alert("Неверный пароль"); return; }
+            isAdmin = true;
+        }
+        showLoading();
+        try {
+            await loadMatches();
+            let tableHtml = `<div class="table-wrapper"><table>
+                <tr><th>Матч</th><th>Дата (UTC)</th><th>Счёт</th><th>Ввести</th></tr>`;
+            for (const m of matchesState) {
+                tableHtml += `<tr id="adminRow_${m.id}">
+                    <td>${getFlag(m.team1)} ${m.team1} – ${getFlag(m.team2)} ${m.team2}</td>
+                    <td>${new Date(m.start_time).toLocaleString('ru-RU', {timeZone:'UTC'})}</td>
+                    <td id="adminScore_${m.id}">${m.real_score || '—'}</td>
+                    <td><input type="text" id="adminInput_${m.id}" class="score-input" placeholder="X:Y">
+                        <button class="setScoreBtn" data-id="${m.id}">✅</button></td>
+                </tr>`;
+            }
+            tableHtml += `</table></div>`;
+            document.getElementById('content').innerHTML = `<h2>🔐 Админ: ввод счёта</h2>${tableHtml}`;
+
+            // Обработчики на кнопки
+            document.querySelectorAll('.setScoreBtn').forEach(btn => {
+                btn.onclick = async () => {
+                    const matchId = parseInt(btn.dataset.id);
+                    const input = document.getElementById(`adminInput_${matchId}`);
+                    const score = input.value.trim();
+                    if (!/^\d+:\d+$/.test(score)) {
+                        alert("Формат: X:Y (только цифры)");
+                        return;
+                    }
+                    showLoading();
+                    try {
+                        await saveRealScore(matchId, score);
+                        // Обновляем только ячейку счёта в таблице
+                        document.getElementById(`adminScore_${matchId}`).textContent = score;
+                        input.value = '';
+                    } catch (e) {
+                        alert('Ошибка: ' + e.message);
+                    } finally {
+                        hideLoading();
+                    }
+                };
+            });
+        } finally {
+            hideLoading();
+        }
+    }
+
+    // ==================== НАВИГАЦИЯ ====================
+    function setupNavigation() {
         document.getElementById('btnPredictions').onclick = () => renderPredictionsPage();
         document.getElementById('btnTable').onclick = () => renderTablePage();
         document.getElementById('btnMyHistory').onclick = () => renderMyHistoryPage();
         document.getElementById('btnAdmin').onclick = () => renderAdminPage();
+    }
+
+    // ==================== ИНИЦИАЛИЗАЦИЯ ====================
+    async function init() {
+        await initUsers(); // создаём пользователей, если база пуста
+        setupNavigation();
+
+        const savedUid = localStorage.getItem('currentUserUid');
+        if (savedUid) {
+            showLoading();
+            try {
+                const userSnap = await db.ref(`users/${savedUid}`).once('value');
+                const userData = userSnap.val();
+                if (userData) {
+                    currentUser = { name: userData.name };
+                    currentUserKey = savedUid;
+                    document.getElementById('navBar').style.display = 'flex';
+                    await loadMatches();
+                    await loadMyPredictions();
+                    renderPredictionsPage();
+                } else {
+                    localStorage.removeItem('currentUserUid');
+                    renderLoginForm();
+                }
+            } catch (e) {
+                renderLoginForm();
+            } finally {
+                hideLoading();
+            }
+        } else {
+            renderLoginForm();
+        }
     }
 
     init();

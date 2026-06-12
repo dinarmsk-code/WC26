@@ -29,6 +29,12 @@
         }
         h1 { color: #ffd966; font-size: clamp(1.5rem, 5vw, 2.2rem); text-align: center; }
         h2, h3 { color: #ffd966; }
+        .user-info {
+            text-align: center;
+            color: #ffd966;
+            margin: 5px 0 10px;
+            font-size: 1rem;
+        }
         .nav {
             display: flex;
             flex-wrap: wrap;
@@ -38,6 +44,7 @@
             padding: 12px;
             border-radius: 40px;
             justify-content: center;
+            align-items: center;
         }
         .nav button {
             background: #3e6b3e;
@@ -54,6 +61,14 @@
         .nav button.active, .nav button:hover {
             background: #ffd966;
             color: #1a3e1a;
+        }
+        .nav .logout-btn {
+            background: #b44;
+            color: white;
+            margin-left: auto;
+        }
+        .nav .logout-btn:hover {
+            background: #d66;
         }
         table {
             width: 100%;
@@ -145,6 +160,9 @@
                 padding: 12px;
                 font-size: 1rem;
             }
+            .nav .logout-btn {
+                margin-left: 0;
+            }
             th, td {
                 padding: 8px 6px;
                 font-size: 0.8rem;
@@ -168,11 +186,13 @@
 <body>
 <div class="container" id="app">
     <h1>⚽ ЧМ-2026 — Угадай счёт!</h1>
+    <div id="userInfo" class="user-info" style="display:none;"></div>
     <div class="nav" id="navBar" style="display:none;">
         <button id="btnPredictions">📝 Мои прогнозы</button>
         <button id="btnTable">🏆 Таблица</button>
         <button id="btnMyHistory">📋 Мои результаты</button>
         <button id="btnAdmin" class="toggle-admin">👑 Админ</button>
+        <button id="btnLogout" class="logout-btn">🚪 Выход</button>
     </div>
     <div id="content"></div>
 </div>
@@ -302,6 +322,19 @@
         return date.toLocaleString('ru-RU', { timeZone: 'Europe/Moscow', hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit', year: 'numeric' });
     }
 
+    // ==================== ФУНКЦИЯ ВЫХОДА ====================
+    function logout() {
+        currentUser = null;
+        currentUserKey = null;
+        isAdmin = false;
+        myPredictions = {};
+        localStorage.removeItem('currentUserUid');
+        document.getElementById('navBar').style.display = 'none';
+        document.getElementById('userInfo').style.display = 'none';
+        document.getElementById('content').innerHTML = '';
+        renderLoginForm();
+    }
+
     // ==================== ИНИЦИАЛИЗАЦИЯ ПОЛЬЗОВАТЕЛЕЙ ====================
     async function initUsers() {
         const usersSnap = await db.ref('users').once('value');
@@ -412,6 +445,7 @@
     // ==================== UI: ФОРМА ЛОГИНА ====================
     function renderLoginForm() {
         document.getElementById('navBar').style.display = 'none';
+        document.getElementById('userInfo').style.display = 'none';
         document.getElementById('content').innerHTML = `
             <div class="login-form">
                 <h2>Вход</h2>
@@ -454,6 +488,8 @@
                 currentUserKey = found.uid;
                 localStorage.setItem('currentUserUid', found.uid);
                 document.getElementById('navBar').style.display = 'flex';
+                document.getElementById('userInfo').style.display = 'block';
+                document.getElementById('userInfo').textContent = `Вы вошли как: ${found.name}`;
                 await loadMatches();
                 await loadMyPredictions();
                 renderPredictionsPage();
@@ -652,6 +688,7 @@
         document.getElementById('btnTable').onclick = () => renderTablePage();
         document.getElementById('btnMyHistory').onclick = () => renderMyHistoryPage();
         document.getElementById('btnAdmin').onclick = () => renderAdminPage();
+        document.getElementById('btnLogout').onclick = () => logout();
     }
 
     // ==================== ИНИЦИАЛИЗАЦИЯ ====================
@@ -669,6 +706,8 @@
                     currentUser = { name: userData.name };
                     currentUserKey = savedUid;
                     document.getElementById('navBar').style.display = 'flex';
+                    document.getElementById('userInfo').style.display = 'block';
+                    document.getElementById('userInfo').textContent = `Вы вошли как: ${userData.name}`;
                     await loadMatches();
                     await loadMyPredictions();
                     renderPredictionsPage();

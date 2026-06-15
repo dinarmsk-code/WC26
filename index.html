@@ -209,6 +209,17 @@
             font-weight: bold;
             margin-left: 6px;
         }
+        /* дополнительно для блока прогнозов всех */
+        .match-block {
+            background: #1f3a1f;
+            border-radius: 16px;
+            padding: 12px;
+            margin: 15px 0;
+        }
+        .match-block h3 {
+            margin-bottom: 10px;
+            color: #ffd966;
+        }
     </style>
 </head>
 <body>
@@ -219,6 +230,7 @@
         <button id="btnPredictions">📝 Мои прогнозы</button>
         <button id="btnTable">🏆 Таблица</button>
         <button id="btnMyHistory">📋 Мои результаты</button>
+        <button id="btnAllPredictions">👥 Прогнозы всех</button>
         <button id="btnAdmin" class="toggle-admin">👑 Админ</button>
         <button id="btnLogout" class="logout-btn">🚪 Выход</button>
     </div>
@@ -571,12 +583,10 @@
                     const val1 = inp1.value.trim();
                     const val2 = inp2.value.trim();
 
-                    // Если оба поля пустые — не сохраняем
                     if (val1 === '' && val2 === '') {
                         alert('Введите счёт для сохранения');
                         return;
                     }
-                    // Если одно из полей заполнено, а второе нет — ошибка
                     if ((val1 !== '' && val2 === '') || (val1 === '' && val2 !== '')) {
                         alert('Заполните оба поля счёта');
                         return;
@@ -591,11 +601,9 @@
                     showLoading();
                     try {
                         await savePrediction(matchId, score);
-                        // Показываем индикатор сохранения
                         const savedIndicator = document.getElementById(`saved_${matchId}`);
                         savedIndicator.style.display = 'inline-block';
                         setTimeout(() => { savedIndicator.style.display = 'none'; }, 2000);
-                        // Обновляем статус если матч завершён
                         if (match && match.real_score) {
                             document.getElementById(`status_${matchId}`).textContent = `✅ ${match.real_score}`;
                         }
@@ -624,12 +632,10 @@
                         const val1 = inp1.value.trim();
                         const val2 = inp2.value.trim();
 
-                        // Пропускаем полностью пустые
                         if (val1 === '' && val2 === '') {
                             skipped++;
                             continue;
                         }
-                        // Пропускаем неполные (не ругаемся, просто игнорируем)
                         if (val1 === '' || val2 === '') {
                             skipped++;
                             continue;
@@ -711,127 +717,189 @@
         }
     }
 
+    // ==================== UI: ПРОГНОЗЫ ВСЕХ (НОВЫЙ БЛОК) ====================
+    async function renderAllPredictionsPage() {
+        showLoading();
+        try {
+            await loadMatches(); // убедимся, что matchesState актуально
+            // получаем всех пользователей
+            const usersSnap = await db.ref('users').once('value');
+            const users = usersSnap.val() || {};
+            // получаем все прогнозы
+            const allPredictionsSnap = await db.ref('predictions').once('value');
+            const allPredictions = allPredictionsSnap.val() || {};
+
+            // фильтруем завершённые матчи (есть real_score)
+            const completedMatches = matchesState.filter(m => m.real_score);
+
+            if (completedMatches.length === 0) {
+                document.getElementById('content').innerHTML = `<h2>👥 Прогнозы всех</h2><p style="color:#ffd966;">Пока нет завершённых матчей.</p>`;
+                return;
+            }
+
+            // Строим структуру: по каждому матчу список прогнозов игроков
+            let html = `<h2>👥 Прогнозы всех игроков на завершённые матчи</h2>`;
+
+            for (const match of completedMatches) {
+                // заголовок матча
+                html += `<div class="match-block">
+                    <h3>${getFlag(match.team1)} ${match.team1} – ${getFlag(match.team2)} ${match.team2} 
+                    (Группа ${match.group}, тур ${match.round})</h3>
+                    <p style="margin-bottom:8px; color:#ffd966;">📅 ${formatTimeMoscow(match.start_time)} | Реальный счёт: ${match.real_score}</p>`;
+
+                // собираем прогнозы по этому матчу
+                const predictionsForMatch = [];
+                for (const [userId, userPreds] of Object.entries(allPredictions)) {
+                    const pred = userPreds[match.id];
+                    if (pred) {
+                        const userName = users[userId] ? users[userId].name : 'Неизвестный';
+                        const points = calcPoints(match.real_score, pred.score);
+                        predictionsForMatch.push({ userName, score: pred.score, points });
+                    }
+                }
+                // сортируем по убыванию очков, затем по имени
+                predictionsForMatch.sort((a, b) => b.points - a.points || a.userName.localeCompare(b.userName));
+
+                if (predictionsForMatch.length === 0) {
+                    html += `<p>Никто не сделал прогноз на этот матч.</p>`;
+                } else {
+                    html += `<table><tr><th>Игрок</th><th>Прогноз</th><th>Очки</th></tr>`;
+                    for (const p of predictionsForMatch) {
+                        html += `<tr>
+                            <td>${p.userName}</td>
+                            <td>${p.score}</td>
+                            <td><b>${p.points}</b></td>
+                        </tr>`;
+                    }
+                    html += `</table>`;
+                }
+                html += `</div>`;
+            }
+
+            document.getElementById('content').innerHTML = html;
+        } finally {
+            hideLoading();
+        }
+    }
+
     // ==================== UI: АДМИН-ПАНЕЛЬ ====================
     async function renderAdminPage() {
-    if (!isAdmin) {
-        const pw = prompt("Пароль администратора:");
-        if (pw !== "admin2026") { alert("Неверный пароль"); return; }
-        isAdmin = true;
-    }
-    showLoading();
-    try {
-        await loadMatches();
-        
-        // Получаем список пользователей для ручной правки очков
-        const usersSnap = await db.ref('users').once('value');
-        const users = usersSnap.val() || {};
-        const leaderboard = await getLeaderboard();
-        
-        let tableHtml = `
-            <h2>🔐 Админ: ввод счёта</h2>
-            <div class="table-wrapper"><table>
-                <tr><th>Матч</th><th>Дата (МСК)</th><th>Счёт</th><th>Ввести</th></tr>`;
-        
-        for (const m of matchesState) {
-            tableHtml += `<tr id="adminRow_${m.id}">
-                <td>${getFlag(m.team1)} ${m.team1} – ${getFlag(m.team2)} ${m.team2}</td>
-                <td>${formatTimeMoscow(m.start_time)}</td>
-                <td id="adminScore_${m.id}">${m.real_score || '—'}</td>
-                <td>
-                    <input type="text" id="admin1_${m.id}" class="score-input" pattern="[0-9]*" inputmode="numeric" placeholder="X">
-                    <span class="score-separator">:</span>
-                    <input type="text" id="admin2_${m.id}" class="score-input" pattern="[0-9]*" inputmode="numeric" placeholder="Y">
-                    <button class="setScoreBtn" data-id="${m.id}">✅</button>
-                </td>
-            </tr>`;
+        if (!isAdmin) {
+            const pw = prompt("Пароль администратора:");
+            if (pw !== "admin2026") { alert("Неверный пароль"); return; }
+            isAdmin = true;
         }
-        tableHtml += `</table></div>`;
-        
-        // Добавляем секцию ручной правки очков
-        tableHtml += `
-            <h2 style="margin-top:30px;">✏️ Ручная правка очков</h2>
-            <div class="admin-panel">
-                <table>
-                    <tr><th>Игрок</th><th>Текущие очки</th><th>Новое значение</th><th></th></tr>`;
-        
-        for (const u of leaderboard) {
-            tableHtml += `<tr>
-                <td>${u.name}</td>
-                <td id="currentPoints_${u.uid}">${u.points}</td>
-                <td><input type="number" id="newPoints_${u.uid}" value="${u.points}" style="width:100px;"></td>
-                <td><button class="updatePointsBtn" data-uid="${u.uid}">💾 Сохранить</button></td>
-            </tr>`;
+        showLoading();
+        try {
+            await loadMatches();
+
+            const usersSnap = await db.ref('users').once('value');
+            const users = usersSnap.val() || {};
+            const leaderboard = await getLeaderboard();
+
+            let tableHtml = `
+                <h2>🔐 Админ: ввод счёта</h2>
+                <div class="table-wrapper"><table>
+                    <tr><th>Матч</th><th>Дата (МСК)</th><th>Счёт</th><th>Ввести</th></tr>`;
+
+            for (const m of matchesState) {
+                tableHtml += `<tr id="adminRow_${m.id}">
+                    <td>${getFlag(m.team1)} ${m.team1} – ${getFlag(m.team2)} ${m.team2}</td>
+                    <td>${formatTimeMoscow(m.start_time)}</td>
+                    <td id="adminScore_${m.id}">${m.real_score || '—'}</td>
+                    <td>
+                        <input type="text" id="admin1_${m.id}" class="score-input" pattern="[0-9]*" inputmode="numeric" placeholder="X">
+                        <span class="score-separator">:</span>
+                        <input type="text" id="admin2_${m.id}" class="score-input" pattern="[0-9]*" inputmode="numeric" placeholder="Y">
+                        <button class="setScoreBtn" data-id="${m.id}">✅</button>
+                    </td>
+                </tr>`;
+            }
+            tableHtml += `</table></div>`;
+
+            tableHtml += `
+                <h2 style="margin-top:30px;">✏️ Ручная правка очков</h2>
+                <div class="admin-panel">
+                    <table>
+                        <tr><th>Игрок</th><th>Текущие очки</th><th>Новое значение</th><th></th></tr>`;
+
+            for (const u of leaderboard) {
+                tableHtml += `<tr>
+                    <td>${u.name}</td>
+                    <td id="currentPoints_${u.uid}">${u.points}</td>
+                    <td><input type="number" id="newPoints_${u.uid}" value="${u.points}" style="width:100px;"></td>
+                    <td><button class="updatePointsBtn" data-uid="${u.uid}">💾 Сохранить</button></td>
+                </tr>`;
+            }
+
+            tableHtml += `</table>
+                    <p style="margin-top:10px;color:#ffd966;">💡 Здесь можно вручную скорректировать очки игрока</p>
+                </div>`;
+
+            document.getElementById('content').innerHTML = tableHtml;
+
+            // Обработчики для ввода счёта матчей
+            document.querySelectorAll('.setScoreBtn').forEach(btn => {
+                btn.onclick = async () => {
+                    const matchId = parseInt(btn.dataset.id);
+                    const inp1 = document.getElementById(`admin1_${matchId}`);
+                    const inp2 = document.getElementById(`admin2_${matchId}`);
+                    const val1 = inp1.value.trim();
+                    const val2 = inp2.value.trim();
+                    if (!/^\d+$/.test(val1) || !/^\d+$/.test(val2)) {
+                        alert("Введите цифры в оба поля");
+                        return;
+                    }
+                    const score = `${val1}:${val2}`;
+                    showLoading();
+                    try {
+                        await saveRealScore(matchId, score);
+                        document.getElementById(`adminScore_${matchId}`).textContent = score;
+                        inp1.value = '';
+                        inp2.value = '';
+                    } catch (e) {
+                        alert('Ошибка: ' + e.message);
+                    } finally {
+                        hideLoading();
+                    }
+                };
+            });
+
+            // Обработчики для ручной правки очков
+            document.querySelectorAll('.updatePointsBtn').forEach(btn => {
+                btn.onclick = async () => {
+                    const uid = btn.dataset.uid;
+                    const newPointsInput = document.getElementById(`newPoints_${uid}`);
+                    const newPoints = parseInt(newPointsInput.value);
+
+                    if (isNaN(newPoints) || newPoints < 0) {
+                        alert('Введите корректное число очков');
+                        return;
+                    }
+
+                    showLoading();
+                    try {
+                        await db.ref(`users/${uid}/totalPoints`).set(newPoints);
+                        document.getElementById(`currentPoints_${uid}`).textContent = newPoints;
+                        alert('Очки обновлены!');
+                    } catch (e) {
+                        alert('Ошибка: ' + e.message);
+                    } finally {
+                        hideLoading();
+                    }
+                };
+            });
+
+        } finally {
+            hideLoading();
         }
-        
-        tableHtml += `</table>
-                <p style="margin-top:10px;color:#ffd966;">💡 Здесь можно вручную скорректировать очки игрока</p>
-            </div>`;
-
-        document.getElementById('content').innerHTML = tableHtml;
-
-        // Обработчики для ввода счёта матчей
-        document.querySelectorAll('.setScoreBtn').forEach(btn => {
-            btn.onclick = async () => {
-                const matchId = parseInt(btn.dataset.id);
-                const inp1 = document.getElementById(`admin1_${matchId}`);
-                const inp2 = document.getElementById(`admin2_${matchId}`);
-                const val1 = inp1.value.trim();
-                const val2 = inp2.value.trim();
-                if (!/^\d+$/.test(val1) || !/^\d+$/.test(val2)) {
-                    alert("Введите цифры в оба поля");
-                    return;
-                }
-                const score = `${val1}:${val2}`;
-                showLoading();
-                try {
-                    await saveRealScore(matchId, score);
-                    document.getElementById(`adminScore_${matchId}`).textContent = score;
-                    inp1.value = '';
-                    inp2.value = '';
-                } catch (e) {
-                    alert('Ошибка: ' + e.message);
-                } finally {
-                    hideLoading();
-                }
-            };
-        });
-        
-        // Обработчики для ручной правки очков
-        document.querySelectorAll('.updatePointsBtn').forEach(btn => {
-            btn.onclick = async () => {
-                const uid = btn.dataset.uid;
-                const newPointsInput = document.getElementById(`newPoints_${uid}`);
-                const newPoints = parseInt(newPointsInput.value);
-                
-                if (isNaN(newPoints) || newPoints < 0) {
-                    alert('Введите корректное число очков');
-                    return;
-                }
-                
-                showLoading();
-                try {
-                    // Обновляем очки в базе
-                    await db.ref(`users/${uid}/totalPoints`).set(newPoints);
-                    // Обновляем отображение
-                    document.getElementById(`currentPoints_${uid}`).textContent = newPoints;
-                    alert('Очки обновлены!');
-                } catch (e) {
-                    alert('Ошибка: ' + e.message);
-                } finally {
-                    hideLoading();
-                }
-            };
-        });
-        
-    } finally {
-        hideLoading();
     }
-}
 
     function setupNavigation() {
         document.getElementById('btnPredictions').onclick = () => renderPredictionsPage();
         document.getElementById('btnTable').onclick = () => renderTablePage();
         document.getElementById('btnMyHistory').onclick = () => renderMyHistoryPage();
+        document.getElementById('btnAllPredictions').onclick = () => renderAllPredictionsPage();
         document.getElementById('btnAdmin').onclick = () => renderAdminPage();
         document.getElementById('btnLogout').onclick = () => logout();
     }

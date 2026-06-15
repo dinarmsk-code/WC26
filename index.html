@@ -209,7 +209,6 @@
             font-weight: bold;
             margin-left: 6px;
         }
-        /* дополнительно для блока прогнозов всех */
         .match-block {
             background: #1f3a1f;
             border-radius: 16px;
@@ -220,6 +219,16 @@
             margin-bottom: 10px;
             color: #ffd966;
         }
+        .status-badge {
+            display: inline-block;
+            padding: 2px 10px;
+            border-radius: 12px;
+            font-size: 0.8rem;
+            font-weight: bold;
+            margin-left: 8px;
+        }
+        .status-live { background: #e74c3c; color: white; }
+        .status-finished { background: #4caf50; color: white; }
     </style>
 </head>
 <body>
@@ -574,7 +583,6 @@
                 <p style="margin:5px 0;color:#ffd966;">💡 Можно сохранять по одному матчу (кнопка 💾) или все изменённые разом</p>
                 ${tableHtml}`;
 
-            // Обработчики для кнопок "сохранить один матч"
             document.querySelectorAll('.save-btn').forEach(btn => {
                 btn.onclick = async () => {
                     const matchId = parseInt(btn.dataset.id);
@@ -615,7 +623,6 @@
                 };
             });
 
-            // Обработчик массового сохранения
             document.getElementById('saveAllBtn').onclick = async () => {
                 const errorDiv = document.getElementById('predError');
                 const msgDiv = document.getElementById('predMessage');
@@ -717,58 +724,65 @@
         }
     }
 
-    // ==================== UI: ПРОГНОЗЫ ВСЕХ (НОВЫЙ БЛОК) ====================
+    // ==================== UI: ПРОГНОЗЫ ВСЕХ (ПОСЛЕ НАЧАЛА МАТЧА) ====================
     async function renderAllPredictionsPage() {
         showLoading();
         try {
-            await loadMatches(); // убедимся, что matchesState актуально
-            // получаем всех пользователей
+            await loadMatches();
             const usersSnap = await db.ref('users').once('value');
             const users = usersSnap.val() || {};
-            // получаем все прогнозы
             const allPredictionsSnap = await db.ref('predictions').once('value');
             const allPredictions = allPredictionsSnap.val() || {};
 
-            // фильтруем завершённые матчи (есть real_score)
-            const completedMatches = matchesState.filter(m => m.real_score);
+            const now = Date.now();
+            // Фильтруем матчи, которые уже начались (start_time <= сейчас)
+            const startedMatches = matchesState.filter(m => new Date(m.start_time).getTime() <= now);
 
-            if (completedMatches.length === 0) {
-                document.getElementById('content').innerHTML = `<h2>👥 Прогнозы всех</h2><p style="color:#ffd966;">Пока нет завершённых матчей.</p>`;
+            if (startedMatches.length === 0) {
+                document.getElementById('content').innerHTML = `<h2>👥 Прогнозы всех</h2>
+                    <p style="color:#ffd966;">Пока нет начавшихся матчей. Прогнозы будут видны после старта игры.</p>`;
                 return;
             }
 
-            // Строим структуру: по каждому матчу список прогнозов игроков
-            let html = `<h2>👥 Прогнозы всех игроков на завершённые матчи</h2>`;
+            let html = `<h2>👥 Прогнозы всех игроков</h2>
+                <p style="margin:8px 0; color:#ffd966;">🔒 Прогнозы видны только после начала матча</p>`;
 
-            for (const match of completedMatches) {
-                // заголовок матча
+            for (const match of startedMatches) {
+                const isFinished = !!match.real_score;
+                const statusBadge = isFinished
+                    ? '<span class="status-badge status-finished">Завершён</span>'
+                    : '<span class="status-badge status-live">Идёт</span>';
+
                 html += `<div class="match-block">
-                    <h3>${getFlag(match.team1)} ${match.team1} – ${getFlag(match.team2)} ${match.team2} 
-                    (Группа ${match.group}, тур ${match.round})</h3>
-                    <p style="margin-bottom:8px; color:#ffd966;">📅 ${formatTimeMoscow(match.start_time)} | Реальный счёт: ${match.real_score}</p>`;
+                    <h3>${getFlag(match.team1)} ${match.team1} – ${getFlag(match.team2)} ${match.team2} ${statusBadge}</h3>
+                    <p style="margin-bottom:8px; color:#ffd966;">
+                        📅 ${formatTimeMoscow(match.start_time)} | Группа ${match.group}, тур ${match.round}
+                        ${isFinished ? ` | Реальный счёт: ${match.real_score}` : ' | Счёт пока неизвестен'}
+                    </p>`;
 
-                // собираем прогнозы по этому матчу
                 const predictionsForMatch = [];
                 for (const [userId, userPreds] of Object.entries(allPredictions)) {
                     const pred = userPreds[match.id];
                     if (pred) {
                         const userName = users[userId] ? users[userId].name : 'Неизвестный';
-                        const points = calcPoints(match.real_score, pred.score);
+                        const points = isFinished ? calcPoints(match.real_score, pred.score) : null;
                         predictionsForMatch.push({ userName, score: pred.score, points });
                     }
                 }
-                // сортируем по убыванию очков, затем по имени
-                predictionsForMatch.sort((a, b) => b.points - a.points || a.userName.localeCompare(b.userName));
+                predictionsForMatch.sort((a, b) => {
+                    if (a.points !== null && b.points !== null) return b.points - a.points;
+                    return a.userName.localeCompare(b.userName);
+                });
 
                 if (predictionsForMatch.length === 0) {
                     html += `<p>Никто не сделал прогноз на этот матч.</p>`;
                 } else {
-                    html += `<table><tr><th>Игрок</th><th>Прогноз</th><th>Очки</th></tr>`;
+                    html += `<table><tr><th>Игрок</th><th>Прогноз</th>${isFinished ? '<th>Очки</th>' : ''}</tr>`;
                     for (const p of predictionsForMatch) {
                         html += `<tr>
                             <td>${p.userName}</td>
                             <td>${p.score}</td>
-                            <td><b>${p.points}</b></td>
+                            ${isFinished ? `<td><b>${p.points}</b></td>` : ''}
                         </tr>`;
                     }
                     html += `</table>`;
@@ -838,7 +852,6 @@
 
             document.getElementById('content').innerHTML = tableHtml;
 
-            // Обработчики для ввода счёта матчей
             document.querySelectorAll('.setScoreBtn').forEach(btn => {
                 btn.onclick = async () => {
                     const matchId = parseInt(btn.dataset.id);
@@ -865,7 +878,6 @@
                 };
             });
 
-            // Обработчики для ручной правки очков
             document.querySelectorAll('.updatePointsBtn').forEach(btn => {
                 btn.onclick = async () => {
                     const uid = btn.dataset.uid;

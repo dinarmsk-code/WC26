@@ -171,38 +171,58 @@
             align-items: center;
             flex-wrap: wrap;
         }
-        @media (max-width: 700px) {
-            .nav {
-                flex-direction: column;
-                align-items: stretch;
-                border-radius: 20px;
-            }
-            .nav button {
-                width: 100%;
-                padding: 12px;
-                font-size: 1rem;
-            }
-            .nav .logout-btn {
-                margin-left: 0;
-            }
-            th, td {
-                padding: 8px 6px;
-                font-size: 0.8rem;
-            }
-            .score-input { width: 45px; }
-            .container { padding: 10px; }
-        }
-        .login-form {
+        /* Новые стили для карточек */
+        .prediction-card, .admin-card {
+            background: #1f3a1f;
+            border-radius: 16px;
+            padding: 12px;
+            margin: 12px 0;
             display: flex;
             flex-direction: column;
-            gap: 10px;
-            max-width: 300px;
-            margin: 20px auto;
-            background: #1f3a1f;
-            padding: 20px;
-            border-radius: 20px;
+            gap: 8px;
         }
-        .login-form select, .login-form input { width: 100%; }
+        .card-header, .admin-card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            color: #ffd966;
+            font-weight: bold;
+            flex-wrap: wrap;
+        }
+        .card-teams {
+            font-size: 1.1rem;
+            display: flex;
+            justify-content: center;
+            gap: 8px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+        .card-inputs, .admin-inputs {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+        .card-save-btn, .admin-save-btn {
+            padding: 10px 20px !important;
+            font-size: 1rem !important;
+            border-radius: 30px;
+            font-weight: bold;
+            background: #4caf50;
+            color: white;
+            margin-top: 5px;
+        }
+        .admin-save-btn {
+            background: #ffd966;
+            color: #1a3e1a;
+        }
+        .admin-current-score {
+            background: #3e6b3e;
+            padding: 2px 10px;
+            border-radius: 10px;
+            font-weight: bold;
+        }
         .saved-indicator {
             display: inline-block;
             color: #4caf50;
@@ -229,6 +249,44 @@
         }
         .status-live { background: #e74c3c; color: white; }
         .status-finished { background: #4caf50; color: white; }
+        @media (max-width: 700px) {
+            .nav {
+                flex-direction: column;
+                align-items: stretch;
+                border-radius: 20px;
+            }
+            .nav button {
+                width: 100%;
+                padding: 12px;
+                font-size: 1rem;
+            }
+            .nav .logout-btn {
+                margin-left: 0;
+            }
+            th, td {
+                padding: 8px 6px;
+                font-size: 0.8rem;
+            }
+            .score-input { width: 45px; }
+            .container { padding: 10px; }
+            .card-teams { font-size: 1rem; }
+            .card-save-btn, .admin-save-btn {
+                padding: 12px 24px !important;
+                font-size: 1rem !important;
+                width: auto;
+            }
+        }
+        .login-form {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            max-width: 300px;
+            margin: 20px auto;
+            background: #1f3a1f;
+            padding: 20px;
+            border-radius: 20px;
+        }
+        .login-form select, .login-form input { width: 100%; }
     </style>
 </head>
 <body>
@@ -361,7 +419,6 @@
     let matchesState = [];
     let myPredictions = {};
 
-    // ==================== ПОКАЗ / СКРЫТИЕ ЗАГРУЗКИ ====================
     function showLoading() { document.getElementById('loadingOverlay').style.display = 'flex'; }
     function hideLoading() { document.getElementById('loadingOverlay').style.display = 'none'; }
 
@@ -370,7 +427,6 @@
         return date.toLocaleString('ru-RU', { timeZone: 'Europe/Moscow', hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit', year: 'numeric' });
     }
 
-    // ==================== ФУНКЦИЯ ВЫХОДА ====================
     function logout() {
         currentUser = null;
         currentUserKey = null;
@@ -448,7 +504,6 @@
         }
     }
 
-    // ==================== СОХРАНЕНИЕ ОДНОГО ПРОГНОЗА ====================
     async function savePrediction(matchId, score) {
         if (!currentUserKey) return;
         const match = matchesState.find(m => m.id == matchId);
@@ -468,7 +523,6 @@
         }
     }
 
-    // ==================== ПОЛУЧЕНИЕ ТАБЛИЦЫ ЛИДЕРОВ ====================
     async function getLeaderboard() {
         const usersSnap = await db.ref('users').once('value');
         const users = usersSnap.val() || {};
@@ -477,7 +531,6 @@
             .sort((a, b) => b.points - a.points);
     }
 
-    // ==================== UI: ФОРМА ЛОГИНА ====================
     function renderLoginForm() {
         document.getElementById('navBar').style.display = 'none';
         document.getElementById('userInfo').style.display = 'none';
@@ -541,77 +594,83 @@
         myPredictions = snap.val() || {};
     }
 
-    // ==================== UI: СТРАНИЦА ПРОГНОЗОВ ====================
+    // ==================== СТРАНИЦА ПРОГНОЗОВ (карточки + сворачивание) ====================
     async function renderPredictionsPage() {
         showLoading();
         try {
             await loadMatches();
             await loadMyPredictions();
-            let tableHtml = `<div class="table-wrapper"><table>
-                <tr><th>Дата (МСК)</th><th>Матч</th><th>Прогноз</th><th>Статус</th><th></th></tr>`;
+            let activeHtml = '';
+            let finishedHtml = '';
             for (const m of matchesState) {
                 const editable = new Date(m.start_time).getTime() > Date.now();
-                let [score1, score2] = ['', ''];
                 const hasPrediction = myPredictions[m.id] && myPredictions[m.id].score;
+                let [score1, score2] = ['', ''];
                 if (hasPrediction) {
                     const parts = myPredictions[m.id].score.split(':');
                     score1 = parts[0] || '';
                     score2 = parts[1] || '';
                 }
-                tableHtml += `
-                    <tr id="row_${m.id}">
-                        <td>${formatTimeMoscow(m.start_time)}</td>
-                        <td>${getFlag(m.team1)} ${m.team1} – ${getFlag(m.team2)} ${m.team2}</td>
-                        <td>
+                const statusText = m.real_score ? `✅ ${m.real_score}` : '⏳';
+                const isFinished = !!m.real_score;
+                const cardHTML = `
+                    <div class="prediction-card" data-match-id="${m.id}" data-finished="${isFinished}">
+                        <div class="card-header">
+                            <span class="match-time">${formatTimeMoscow(m.start_time)}</span>
+                            <span class="match-status" id="status_${m.id}">${statusText}</span>
+                        </div>
+                        <div class="card-teams">
+                            <span>${getFlag(m.team1)} ${m.team1}</span>
+                            <span class="vs">–</span>
+                            <span>${getFlag(m.team2)} ${m.team2}</span>
+                        </div>
+                        <div class="card-inputs">
                             <input type="text" id="pred1_${m.id}" class="score-input" value="${score1}" pattern="[0-9]*" inputmode="numeric" ${!editable ? 'disabled' : ''}>
                             <span class="score-separator">:</span>
                             <input type="text" id="pred2_${m.id}" class="score-input" value="${score2}" pattern="[0-9]*" inputmode="numeric" ${!editable ? 'disabled' : ''}>
-                        </td>
-                        <td id="status_${m.id}">${m.real_score ? `✅ ${m.real_score}` : '⏳'}</td>
-                        <td>
-                            ${editable ? `<button class="save-btn" data-id="${m.id}">💾</button>` : ''}
+                            ${editable ? `<button class="save-btn card-save-btn" data-id="${m.id}">💾 Сохранить</button>` : ''}
                             <span id="saved_${m.id}" class="saved-indicator" style="display:none;">✓</span>
-                        </td>
-                    </tr>`;
+                        </div>
+                    </div>
+                `;
+                if (isFinished) {
+                    finishedHtml += cardHTML;
+                } else {
+                    activeHtml += cardHTML;
+                }
             }
-            tableHtml += `</table></div>
-                <button id="saveAllBtn">💾 Сохранить все изменённые</button>
+            const finishedCount = finishedHtml ? matchesState.filter(m => m.real_score).length : 0;
+            const toggleBtnHTML = finishedHtml ? `<button id="toggleFinishedBtn" style="margin-top:10px;">📋 Показать завершённые матчи (${finishedCount})</button>
+                <div id="finishedMatches" style="display:none;">${finishedHtml}</div>` : '';
+
+            document.getElementById('content').innerHTML = `
+                <h2>✍️ Прогнозы (${currentUser.name})</h2>
+                <p style="margin:5px 0;color:#ffd966;">💡 Можно сохранять по одному матчу или все изменённые разом</p>
+                <button id="saveAllBtn" style="margin-bottom:15px;">💾 Сохранить все изменённые</button>
                 <div id="predMessage" class="success-message" style="display:none;"></div>
-                <div id="predError" class="error-message" style="display:none;"></div>`;
+                <div id="predError" class="error-message" style="display:none;"></div>
+                <div id="activeMatches">${activeHtml}</div>
+                ${toggleBtnHTML}
+            `;
 
-            document.getElementById('content').innerHTML = `<h2>✍️ Прогнозы (${currentUser.name})</h2>
-                <p style="margin:5px 0;color:#ffd966;">💡 Можно сохранять по одному матчу (кнопка 💾) или все изменённые разом</p>
-                ${tableHtml}`;
-
-            document.querySelectorAll('.save-btn').forEach(btn => {
+            // Обработчики сохранения отдельного матча
+            document.querySelectorAll('.card-save-btn').forEach(btn => {
                 btn.onclick = async () => {
                     const matchId = parseInt(btn.dataset.id);
                     const inp1 = document.getElementById(`pred1_${matchId}`);
                     const inp2 = document.getElementById(`pred2_${matchId}`);
                     const val1 = inp1.value.trim();
                     const val2 = inp2.value.trim();
-
-                    if (val1 === '' && val2 === '') {
-                        alert('Введите счёт для сохранения');
-                        return;
-                    }
-                    if ((val1 !== '' && val2 === '') || (val1 === '' && val2 !== '')) {
-                        alert('Заполните оба поля счёта');
-                        return;
-                    }
-                    if (!/^\d+$/.test(val1) || !/^\d+$/.test(val2)) {
-                        alert('Только цифры в полях счёта');
-                        return;
-                    }
-
+                    if (val1 === '' && val2 === '') { alert('Введите счёт'); return; }
+                    if ((val1 !== '' && val2 === '') || (val1 === '' && val2 !== '')) { alert('Заполните оба поля'); return; }
+                    if (!/^\d+$/.test(val1) || !/^\d+$/.test(val2)) { alert('Только цифры'); return; }
                     const score = `${val1}:${val2}`;
                     const match = matchesState.find(m => m.id === matchId);
                     showLoading();
                     try {
                         await savePrediction(matchId, score);
-                        const savedIndicator = document.getElementById(`saved_${matchId}`);
-                        savedIndicator.style.display = 'inline-block';
-                        setTimeout(() => { savedIndicator.style.display = 'none'; }, 2000);
+                        document.getElementById(`saved_${matchId}`).style.display = 'inline-block';
+                        setTimeout(() => { document.getElementById(`saved_${matchId}`).style.display = 'none'; }, 2000);
                         if (match && match.real_score) {
                             document.getElementById(`status_${matchId}`).textContent = `✅ ${match.real_score}`;
                         }
@@ -623,39 +682,30 @@
                 };
             });
 
+            // Сохранить все изменённые
             document.getElementById('saveAllBtn').onclick = async () => {
                 const errorDiv = document.getElementById('predError');
                 const msgDiv = document.getElementById('predMessage');
                 errorDiv.style.display = 'none';
                 msgDiv.style.display = 'none';
-                let changed = 0;
-                let skipped = 0;
+                let changed = 0, skipped = 0;
                 showLoading();
                 try {
-                    for (const m of matchesState) {
-                        const inp1 = document.getElementById(`pred1_${m.id}`);
-                        const inp2 = document.getElementById(`pred2_${m.id}`);
-                        if (!inp1 || !inp2 || inp1.disabled || inp2.disabled) continue;
+                    const cards = document.querySelectorAll('.prediction-card');
+                    for (const card of cards) {
+                        const matchId = parseInt(card.dataset.matchId);
+                        const inp1 = document.getElementById(`pred1_${matchId}`);
+                        const inp2 = document.getElementById(`pred2_${matchId}`);
+                        if (!inp1 || !inp2 || inp1.disabled || inp2.disabled) { skipped++; continue; }
                         const val1 = inp1.value.trim();
                         const val2 = inp2.value.trim();
-
-                        if (val1 === '' && val2 === '') {
-                            skipped++;
-                            continue;
-                        }
-                        if (val1 === '' || val2 === '') {
-                            skipped++;
-                            continue;
-                        }
-                        if (!/^\d+$/.test(val1) || !/^\d+$/.test(val2)) {
-                            skipped++;
-                            continue;
-                        }
-
+                        if (val1 === '' && val2 === '') { skipped++; continue; }
+                        if (val1 === '' || val2 === '') { skipped++; continue; }
+                        if (!/^\d+$/.test(val1) || !/^\d+$/.test(val2)) { skipped++; continue; }
                         const newVal = `${val1}:${val2}`;
-                        const oldVal = myPredictions[m.id]?.score || '';
+                        const oldVal = myPredictions[matchId]?.score || '';
                         if (newVal !== oldVal) {
-                            await savePrediction(m.id, newVal);
+                            await savePrediction(matchId, newVal);
                             changed++;
                         }
                     }
@@ -677,12 +727,27 @@
                     hideLoading();
                 }
             };
+
+            // Переключение завершённых матчей
+            const toggleBtn = document.getElementById('toggleFinishedBtn');
+            if (toggleBtn) {
+                toggleBtn.onclick = () => {
+                    const finishedDiv = document.getElementById('finishedMatches');
+                    if (finishedDiv.style.display === 'none') {
+                        finishedDiv.style.display = 'block';
+                        toggleBtn.textContent = '📋 Скрыть завершённые матчи';
+                    } else {
+                        finishedDiv.style.display = 'none';
+                        toggleBtn.textContent = `📋 Показать завершённые матчи (${finishedCount})`;
+                    }
+                };
+            }
         } finally {
             hideLoading();
         }
     }
 
-    // ==================== UI: ТАБЛИЦА ЛИДЕРОВ ====================
+    // ==================== ТАБЛИЦА ЛИДЕРОВ ====================
     async function renderTablePage() {
         showLoading();
         try {
@@ -696,7 +761,7 @@
         }
     }
 
-    // ==================== UI: МОЯ ИСТОРИЯ ====================
+    // ==================== МОЯ ИСТОРИЯ ====================
     async function renderMyHistoryPage() {
         showLoading();
         try {
@@ -724,7 +789,7 @@
         }
     }
 
-    // ==================== UI: ПРОГНОЗЫ ВСЕХ (ОБРАТНЫЙ ХРОНОЛОГИЧЕСКИЙ ПОРЯДОК) ====================
+    // ==================== ПРОГНОЗЫ ВСЕХ ====================
     async function renderAllPredictionsPage() {
         showLoading();
         try {
@@ -733,35 +798,26 @@
             const users = usersSnap.val() || {};
             const allPredictionsSnap = await db.ref('predictions').once('value');
             const allPredictions = allPredictionsSnap.val() || {};
-
             const now = Date.now();
-            // Фильтруем матчи, которые уже начались, и сортируем от новых к старым
-            const startedMatches = matchesState
-                .filter(m => new Date(m.start_time).getTime() <= now)
-                .sort((a, b) => new Date(b.start_time).getTime() - new Date(a.start_time).getTime());
-
+            const startedMatches = matchesState.filter(m => new Date(m.start_time).getTime() <= now);
             if (startedMatches.length === 0) {
                 document.getElementById('content').innerHTML = `<h2>👥 Прогнозы всех</h2>
                     <p style="color:#ffd966;">Пока нет начавшихся матчей. Прогнозы будут видны после старта игры.</p>`;
                 return;
             }
-
             let html = `<h2>👥 Прогнозы всех игроков</h2>
-                <p style="margin:8px 0; color:#ffd966;">🔒 Прогнозы видны только после начала матча | Сначала новые</p>`;
-
+                <p style="margin:8px 0; color:#ffd966;">🔒 Прогнозы видны только после начала матча</p>`;
             for (const match of startedMatches) {
                 const isFinished = !!match.real_score;
                 const statusBadge = isFinished
                     ? '<span class="status-badge status-finished">Завершён</span>'
                     : '<span class="status-badge status-live">Идёт</span>';
-
                 html += `<div class="match-block">
                     <h3>${getFlag(match.team1)} ${match.team1} – ${getFlag(match.team2)} ${match.team2} ${statusBadge}</h3>
                     <p style="margin-bottom:8px; color:#ffd966;">
                         📅 ${formatTimeMoscow(match.start_time)} | Группа ${match.group}, тур ${match.round}
                         ${isFinished ? ` | Реальный счёт: ${match.real_score}` : ' | Счёт пока неизвестен'}
                     </p>`;
-
                 const predictionsForMatch = [];
                 for (const [userId, userPreds] of Object.entries(allPredictions)) {
                     const pred = userPreds[match.id];
@@ -775,7 +831,6 @@
                     if (a.points !== null && b.points !== null) return b.points - a.points;
                     return a.userName.localeCompare(b.userName);
                 });
-
                 if (predictionsForMatch.length === 0) {
                     html += `<p>Никто не сделал прогноз на этот матч.</p>`;
                 } else {
@@ -791,14 +846,13 @@
                 }
                 html += `</div>`;
             }
-
             document.getElementById('content').innerHTML = html;
         } finally {
             hideLoading();
         }
     }
 
-    // ==================== UI: АДМИН-ПАНЕЛЬ ====================
+    // ==================== АДМИН-ПАНЕЛЬ (карточки для ввода счёта) ====================
     async function renderAdminPage() {
         if (!isAdmin) {
             const pw = prompt("Пароль администратора:");
@@ -808,51 +862,46 @@
         showLoading();
         try {
             await loadMatches();
-
-            const usersSnap = await db.ref('users').once('value');
-            const users = usersSnap.val() || {};
             const leaderboard = await getLeaderboard();
-
-            let tableHtml = `
-                <h2>🔐 Админ: ввод счёта</h2>
-                <div class="table-wrapper"><table>
-                    <tr><th>Матч</th><th>Дата (МСК)</th><th>Счёт</th><th>Ввести</th></tr>`;
-
+            let cardsHtml = '';
             for (const m of matchesState) {
-                tableHtml += `<tr id="adminRow_${m.id}">
-                    <td>${getFlag(m.team1)} ${m.team1} – ${getFlag(m.team2)} ${m.team2}</td>
-                    <td>${formatTimeMoscow(m.start_time)}</td>
-                    <td id="adminScore_${m.id}">${m.real_score || '—'}</td>
-                    <td>
-                        <input type="text" id="admin1_${m.id}" class="score-input" pattern="[0-9]*" inputmode="numeric" placeholder="X">
-                        <span class="score-separator">:</span>
-                        <input type="text" id="admin2_${m.id}" class="score-input" pattern="[0-9]*" inputmode="numeric" placeholder="Y">
-                        <button class="setScoreBtn" data-id="${m.id}">✅</button>
-                    </td>
-                </tr>`;
+                cardsHtml += `
+                    <div class="admin-card">
+                        <div class="admin-card-header">
+                            <span>${formatTimeMoscow(m.start_time)}</span>
+                            <span>${getFlag(m.team1)} ${m.team1} – ${getFlag(m.team2)} ${m.team2}</span>
+                            <span id="adminScore_${m.id}" class="admin-current-score">${m.real_score || '—'}</span>
+                        </div>
+                        <div class="admin-inputs">
+                            <input type="text" id="admin1_${m.id}" class="score-input" pattern="[0-9]*" inputmode="numeric" placeholder="X">
+                            <span class="score-separator">:</span>
+                            <input type="text" id="admin2_${m.id}" class="score-input" pattern="[0-9]*" inputmode="numeric" placeholder="Y">
+                            <button class="setScoreBtn admin-save-btn" data-id="${m.id}">✅ Установить</button>
+                        </div>
+                    </div>
+                `;
             }
-            tableHtml += `</table></div>`;
-
-            tableHtml += `
-                <h2 style="margin-top:30px;">✏️ Ручная правка очков</h2>
-                <div class="admin-panel">
-                    <table>
-                        <tr><th>Игрок</th><th>Текущие очки</th><th>Новое значение</th><th></th></tr>`;
-
+            let leaderTable = `<table>
+                <tr><th>Игрок</th><th>Очки</th><th>Новое</th><th></th></tr>`;
             for (const u of leaderboard) {
-                tableHtml += `<tr>
+                leaderTable += `<tr>
                     <td>${u.name}</td>
                     <td id="currentPoints_${u.uid}">${u.points}</td>
-                    <td><input type="number" id="newPoints_${u.uid}" value="${u.points}" style="width:100px;"></td>
-                    <td><button class="updatePointsBtn" data-uid="${u.uid}">💾 Сохранить</button></td>
+                    <td><input type="number" id="newPoints_${u.uid}" value="${u.points}" style="width:80px;"></td>
+                    <td><button class="updatePointsBtn" data-uid="${u.uid}">💾</button></td>
                 </tr>`;
             }
+            leaderTable += `</table>`;
 
-            tableHtml += `</table>
+            document.getElementById('content').innerHTML = `
+                <h2>🔐 Админ: ввод счёта</h2>
+                <div id="adminCards">${cardsHtml}</div>
+                <h2 style="margin-top:30px;">✏️ Ручная правка очков</h2>
+                <div class="admin-panel">
+                    <div class="table-wrapper">${leaderTable}</div>
                     <p style="margin-top:10px;color:#ffd966;">💡 Здесь можно вручную скорректировать очки игрока</p>
-                </div>`;
-
-            document.getElementById('content').innerHTML = tableHtml;
+                </div>
+            `;
 
             document.querySelectorAll('.setScoreBtn').forEach(btn => {
                 btn.onclick = async () => {
@@ -885,12 +934,10 @@
                     const uid = btn.dataset.uid;
                     const newPointsInput = document.getElementById(`newPoints_${uid}`);
                     const newPoints = parseInt(newPointsInput.value);
-
                     if (isNaN(newPoints) || newPoints < 0) {
                         alert('Введите корректное число очков');
                         return;
                     }
-
                     showLoading();
                     try {
                         await db.ref(`users/${uid}/totalPoints`).set(newPoints);

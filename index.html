@@ -724,7 +724,7 @@
         }
     }
 
-    // ==================== UI: ПРОГНОЗЫ ВСЕХ (ПОСЛЕ НАЧАЛА МАТЧА) ====================
+    // ==================== UI: ПРОГНОЗЫ ВСЕХ (ОБРАТНЫЙ ХРОНОЛОГИЧЕСКИЙ ПОРЯДОК) ====================
     async function renderAllPredictionsPage() {
         showLoading();
         try {
@@ -735,8 +735,10 @@
             const allPredictions = allPredictionsSnap.val() || {};
 
             const now = Date.now();
-            // Фильтруем матчи, которые уже начались (start_time <= сейчас)
-            const startedMatches = matchesState.filter(m => new Date(m.start_time).getTime() <= now);
+            // Фильтруем матчи, которые уже начались, и сортируем от новых к старым
+            const startedMatches = matchesState
+                .filter(m => new Date(m.start_time).getTime() <= now)
+                .sort((a, b) => new Date(b.start_time).getTime() - new Date(a.start_time).getTime());
 
             if (startedMatches.length === 0) {
                 document.getElementById('content').innerHTML = `<h2>👥 Прогнозы всех</h2>
@@ -745,7 +747,7 @@
             }
 
             let html = `<h2>👥 Прогнозы всех игроков</h2>
-                <p style="margin:8px 0; color:#ffd966;">🔒 Прогнозы видны только после начала матча</p>`;
+                <p style="margin:8px 0; color:#ffd966;">🔒 Прогнозы видны только после начала матча | Сначала новые</p>`;
 
             for (const match of startedMatches) {
                 const isFinished = !!match.real_score;

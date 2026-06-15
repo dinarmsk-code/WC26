@@ -789,7 +789,7 @@
         }
     }
 
-    // ==================== ПРОГНОЗЫ ВСЕХ ====================
+    // ==================== ПРОГНОЗЫ ВСЕХ (с сортировкой от новых к старым) ====================
     async function renderAllPredictionsPage() {
         showLoading();
         try {
@@ -799,7 +799,12 @@
             const allPredictionsSnap = await db.ref('predictions').once('value');
             const allPredictions = allPredictionsSnap.val() || {};
             const now = Date.now();
-            const startedMatches = matchesState.filter(m => new Date(m.start_time).getTime() <= now);
+
+            // Фильтруем начавшиеся матчи и сортируем по убыванию времени (свежие сверху)
+            const startedMatches = matchesState
+                .filter(m => new Date(m.start_time).getTime() <= now)
+                .sort((a, b) => new Date(b.start_time) - new Date(a.start_time));
+
             if (startedMatches.length === 0) {
                 document.getElementById('content').innerHTML = `<h2>👥 Прогнозы всех</h2>
                     <p style="color:#ffd966;">Пока нет начавшихся матчей. Прогнозы будут видны после старта игры.</p>`;

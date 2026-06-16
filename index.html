@@ -171,7 +171,6 @@
             align-items: center;
             flex-wrap: wrap;
         }
-        /* Новые стили для карточек */
         .prediction-card, .admin-card {
             background: #1f3a1f;
             border-radius: 16px;
@@ -482,6 +481,15 @@
         return true;
     }
 
+    async function removeRealScore(matchId) {
+        if (!isAdmin) return false;
+        await db.ref(`matches/${matchId}`).set(null);
+        const match = matchesState.find(m => m.id == matchId);
+        if (match) match.real_score = null;
+        await recalcPointsForMatchReset(matchId);
+        return true;
+    }
+
     async function recalcPointsForMatch(matchId) {
         const match = matchesState.find(m => m.id == matchId);
         if (!match || !match.real_score) return;
@@ -496,6 +504,25 @@
             if (oldPoints !== newPoints) {
                 updates[`predictions/${userId}/${matchId}/points`] = newPoints;
                 userPointDeltas[userId] = (userPointDeltas[userId] || 0) + (newPoints - oldPoints);
+            }
+        }
+        if (Object.keys(updates).length > 0) await db.ref().update(updates);
+        for (const [userId, delta] of Object.entries(userPointDeltas)) {
+            if (delta !== 0) await db.ref(`users/${userId}/totalPoints`).transaction(current => (current || 0) + delta);
+        }
+    }
+
+    async function recalcPointsForMatchReset(matchId) {
+        const allPredictions = (await db.ref('predictions').once('value')).val() || {};
+        const updates = {};
+        const userPointDeltas = {};
+        for (const [userId, preds] of Object.entries(allPredictions)) {
+            const pred = preds[matchId];
+            if (!pred) continue;
+            const oldPoints = pred.points || 0;
+            if (oldPoints !== 0) {
+                updates[`predictions/${userId}/${matchId}/points`] = 0;
+                userPointDeltas[userId] = (userPointDeltas[userId] || 0) - oldPoints;
             }
         }
         if (Object.keys(updates).length > 0) await db.ref().update(updates);
@@ -594,7 +621,6 @@
         myPredictions = snap.val() || {};
     }
 
-    // ==================== СТРАНИЦА ПРОГНОЗОВ (карточки + сворачивание) ====================
     async function renderPredictionsPage() {
         showLoading();
         try {
@@ -653,7 +679,6 @@
                 ${toggleBtnHTML}
             `;
 
-            // Обработчики сохранения отдельного матча
             document.querySelectorAll('.card-save-btn').forEach(btn => {
                 btn.onclick = async () => {
                     const matchId = parseInt(btn.dataset.id);
@@ -682,7 +707,6 @@
                 };
             });
 
-            // Сохранить все изменённые
             document.getElementById('saveAllBtn').onclick = async () => {
                 const errorDiv = document.getElementById('predError');
                 const msgDiv = document.getElementById('predMessage');
@@ -728,7 +752,6 @@
                 }
             };
 
-            // Переключение завершённых матчей
             const toggleBtn = document.getElementById('toggleFinishedBtn');
             if (toggleBtn) {
                 toggleBtn.onclick = () => {
@@ -747,7 +770,6 @@
         }
     }
 
-    // ==================== ТАБЛИЦА ЛИДЕРОВ ====================
     async function renderTablePage() {
         showLoading();
         try {
@@ -761,7 +783,6 @@
         }
     }
 
-    // ==================== МОЯ ИСТОРИЯ ====================
     async function renderMyHistoryPage() {
         showLoading();
         try {
@@ -789,7 +810,6 @@
         }
     }
 
-    // ==================== ПРОГНОЗЫ ВСЕХ (с сортировкой от новых к старым) ====================
     async function renderAllPredictionsPage() {
         showLoading();
         try {
@@ -800,7 +820,6 @@
             const allPredictions = allPredictionsSnap.val() || {};
             const now = Date.now();
 
-            // Фильтруем начавшиеся матчи и сортируем по убыванию времени (свежие сверху)
             const startedMatches = matchesState
                 .filter(m => new Date(m.start_time).getTime() <= now)
                 .sort((a, b) => new Date(b.start_time) - new Date(a.start_time));
@@ -857,7 +876,6 @@
         }
     }
 
-    // ==================== АДМИН-ПАНЕЛЬ (карточки для ввода счёта) ====================
     async function renderAdminPage() {
         if (!isAdmin) {
             const pw = prompt("Пароль администратора:");
@@ -882,6 +900,7 @@
                             <span class="score-separator">:</span>
                             <input type="text" id="admin2_${m.id}" class="score-input" pattern="[0-9]*" inputmode="numeric" placeholder="Y">
                             <button class="setScoreBtn admin-save-btn" data-id="${m.id}">✅ Установить</button>
+                            ${m.real_score ? `<button class="removeScoreBtn admin-save-btn" data-id="${m.id}" style="background:#b44; color:white;">🗑️ Сбросить</button>` : ''}
                         </div>
                     </div>
                 `;
@@ -926,6 +945,23 @@
                         document.getElementById(`adminScore_${matchId}`).textContent = score;
                         inp1.value = '';
                         inp2.value = '';
+                    } catch (e) {
+                        alert('Ошибка: ' + e.message);
+                    } finally {
+                        hideLoading();
+                    }
+                };
+            });
+
+            document.querySelectorAll('.removeScoreBtn').forEach(btn => {
+                btn.onclick = async () => {
+                    const matchId = parseInt(btn.dataset.id);
+                    if (!confirm(`Точно сбросить счёт матча #${matchId}? Очки у всех игроков обнулятся для этого матча.`)) return;
+                    showLoading();
+                    try {
+                        await removeRealScore(matchId);
+                        document.getElementById(`adminScore_${matchId}`).textContent = '—';
+                        await renderAdminPage();
                     } catch (e) {
                         alert('Ошибка: ' + e.message);
                     } finally {

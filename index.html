@@ -319,7 +319,7 @@
     const db = firebase.database();
 
     // ==================== СПИСОК МАТЧЕЙ (72) ====================
-    const matchesData = [
+const matchesData = [
         {id:1,group:"A",round:1,team1:"Мексика",team2:"ЮАР",start_time:"2026-06-11T19:00:00Z",real_score:null},
         {id:2,group:"A",round:1,team1:"Южная Корея",team2:"Чехия",start_time:"2026-06-12T02:00:00Z",real_score:null},
         {id:3,group:"B",round:1,team1:"Канада",team2:"Босния и Герцеговина",start_time:"2026-06-12T19:00:00Z",real_score:null},
@@ -407,8 +407,17 @@
         {id:85,group:"1/16",round:4,team1:"Швейцария",team2:"Алжир",start_time:"2026-07-03T03:00:00Z",real_score:null},
         {id:86,group:"1/16",round:4,team1:"Австралия",team2:"Египет",start_time:"2026-07-03T18:00:00Z",real_score:null},
         {id:87,group:"1/16",round:4,team1:"Аргентина",team2:"Кабо-Верде",start_time:"2026-07-03T22:00:00Z",real_score:null},
-        {id:88,group:"1/16",round:4,team1:"Колумбия",team2:"Гана",start_time:"2026-07-04T01:30:00Z",real_score:null}
-    ];
+        {id:88,group:"1/16",round:4,team1:"Колумбия",team2:"Гана",start_time:"2026-07-04T01:30:00Z",real_score:null},
+        // 1/8 финала (добавлены)
+        {id:89,group:"1/8",round:5,team1:"Канада",team2:"Марокко",start_time:"2026-07-04T17:00:00Z",real_score:null},        // B02, 04.07.2026 20:00 МСК
+        {id:90,group:"1/8",round:5,team1:"Парагвай",team2:"Франция",start_time:"2026-07-04T21:00:00Z",real_score:null},      // B01, 05.07.2026 00:00 МСК
+        {id:91,group:"1/8",round:5,team1:"Бразилия",team2:"Норвегия",start_time:"2026-07-05T20:00:00Z",real_score:null},     // B05, 05.07.2026 23:00 МСК
+        {id:92,group:"1/8",round:5,team1:"Мексика",team2:"Англия",start_time:"2026-07-06T00:00:00Z",real_score:null},        // B06, 06.07.2026 03:00 МСК
+        {id:93,group:"1/8",round:5,team1:"Португалия",team2:"Испания",start_time:"2026-07-06T19:00:00Z",real_score:null},    // B03, 06.07.2026 22:00 МСК
+        {id:94,group:"1/8",round:5,team1:"США",team2:"Бельгия",start_time:"2026-07-07T00:00:00Z",real_score:null},           // B04, 07.07.2026 03:00 МСК
+        {id:95,group:"1/8",round:5,team1:"Аргентина",team2:"Египет",start_time:"2026-07-07T16:00:00Z",real_score:null},      // B07, 07.07.2026 19:00 МСК
+        {id:96,group:"1/8",round:5,team1:"Швейцария",team2:"Колумбия",start_time:"2026-07-07T20:00:00Z",real_score:null}     // B08, 07.07.2026 23:00 МСК
+];
 
     // ==================== ФЛАГИ ДЛЯ ВСЕХ 48 СТРАН ====================
     const flags = {
